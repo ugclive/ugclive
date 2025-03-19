@@ -1,69 +1,144 @@
-# Welcome to your Lovable project
+# Viral AI UGC Frontend
 
-## Project info
+A modern web application for generating and managing UGC (User Generated Content) using AI. Built with React, TypeScript, and Vite.
 
-**URL**: https://lovable.dev/projects/89e6c543-4547-4fac-af2d-8f66e322e760
+## Features
 
-## How can I edit this code?
+- 🚀 Modern React with TypeScript
+- ⚡️ Lightning-fast builds with Vite
+- 🎨 Beautiful UI components with shadcn/ui
+- 🎯 State management with React Query
+- 🔐 Authentication with Supabase
+- 📱 Responsive design with Tailwind CSS
+- 🌙 Dark mode support
+- 📊 Data visualization with Recharts
+- 🔄 Form handling with React Hook Form
+- ✨ Modern animations and transitions
 
-There are several ways of editing your application.
+## Project Structure
 
-**Use Lovable**
+```
+src/
+├── components/     # Reusable UI components
+├── config/        # Application configuration
+├── contexts/      # React context providers
+├── hooks/         # Custom React hooks
+├── integrations/  # Third-party integrations (Supabase)
+├── lib/           # Utility functions and helpers
+├── pages/         # Page components
+├── services/      # API and service layer
+└── App.tsx        # Root application component
+```
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/89e6c543-4547-4fac-af2d-8f66e322e760) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+### Prerequisites
 
-**Use your preferred IDE**
+- Node.js 18+ and npm
+- Git
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Installation
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
+1. Clone the repository:
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
 git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+2. Install dependencies:
+```sh
+npm install
+```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+3. Create a `.env` file in the frontend directory with the following variables:
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_BASE_URL=your_base_url
+```
+
+4. Start the development server:
+```sh
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The application will be available at `http://localhost:8080`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Available Scripts
 
-**Use GitHub Codespaces**
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run build:dev` - Build for development
+- `npm run preview` - Preview production build
+- `npm run lint` - Run ESLint
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Key Dependencies
 
-## What technologies are used for this project?
-
-This project is built with .
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
+### Production Dependencies
+- React 18.3
+- React Router DOM 6.26
+- Supabase JS Client
+- TanStack Query (React Query)
+- shadcn/ui components (Radix UI)
 - Tailwind CSS
+- React Hook Form
+- Zod for validation
+- Recharts for data visualization
 
-## How can I deploy this project?
+### Development Dependencies
+- TypeScript 5.5
+- Vite 5.4
+- ESLint
+- PostCSS
+- Tailwind CSS plugins
 
-Simply open [Lovable](https://lovable.dev/projects/89e6c543-4547-4fac-af2d-8f66e322e760) and click on Share -> Publish.
+## Deployment
 
-## I want to use a custom domain - is that possible?
+### Production Build
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+To create a production build:
+
+```sh
+npm run build
+```
+
+The build artifacts will be stored in the `dist/` directory.
+
+### Deployment Options
+
+1. **Vercel (Recommended)**
+   - Connect your GitHub repository
+   - Set environment variables
+   - Deploy automatically
+
+2. **Manual Deployment**
+   - Build the project
+   - Deploy the `dist` directory to your hosting provider
+
+## Environment Variables
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `VITE_SUPABASE_URL` | Supabase project URL | Yes |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anonymous key | Yes |
+| `VITE_BASE_URL` | Application base URL | Yes |
+
+## Browser Support
+
+The application supports all modern browsers:
+
+- Chrome/Edge (latest 2 versions)
+- Firefox (latest 2 versions)
+- Safari (latest 2 versions)
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is proprietary software. All rights reserved.
