@@ -6,7 +6,6 @@ import {
   CarouselNext,
   CarouselPrevious,
 } from "@/components/ui/carousel";
-import { useInView } from "react-intersection-observer";
 import useEmblaCarousel from "embla-carousel-react";
 
 interface AutoCarouselProps {
@@ -25,9 +24,7 @@ const AutoCarousel = ({
   className,
 }: AutoCarouselProps) => {
   const [api, setApi] = React.useState<CarouselApi>();
-  const { ref, inView } = useInView({
-    threshold: 0.3,
-  });
+  const containerRef = useRef<HTMLDivElement>(null);
   const intervalRef = useRef<number | null>(null);
 
   const startAutoScroll = () => {
@@ -46,17 +43,14 @@ const AutoCarousel = ({
   };
 
   useEffect(() => {
-    if (inView) {
-      startAutoScroll();
-    } else {
-      stopAutoScroll();
-    }
+    // Start scrolling when component mounts
+    startAutoScroll();
     
     return () => stopAutoScroll();
-  }, [inView, api]);
+  }, [api]);
 
   return (
-    <div ref={ref} className={className}>
+    <div ref={containerRef} className={className}>
       <Carousel
         opts={{
           align: "start",
@@ -65,7 +59,7 @@ const AutoCarousel = ({
         }}
         setApi={setApi}
         onMouseEnter={stopAutoScroll}
-        onMouseLeave={() => inView && startAutoScroll()}
+        onMouseLeave={startAutoScroll}
       >
         <CarouselContent className="-ml-2 md:-ml-4">
           {children.map((child, index) => (
