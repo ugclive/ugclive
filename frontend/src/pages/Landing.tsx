@@ -19,6 +19,59 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import VideoCard from "@/components/VideoCard";
+
+// Sample video data for the carousel
+const SAMPLE_VIDEOS = [
+  {
+    id: 1,
+    title: "Product Demo",
+    description: "Generate engaging product demos in seconds.",
+    thumbnail: "/images/thumbnails/product-demo.jpg",
+    videoUrl: "/videos/product-demo.mp4",
+    gradient: "bg-gradient-to-r from-blue-500 to-indigo-600"
+  },
+  {
+    id: 2,
+    title: "Testimonial",
+    description: "Create authentic-looking testimonials with AI.",
+    thumbnail: "/images/thumbnails/testimonial.jpg",
+    videoUrl: "/videos/testimonial.mp4",
+    gradient: "bg-gradient-to-r from-indigo-500 to-purple-600"
+  },
+  {
+    id: 3,
+    title: "Tutorial",
+    description: "Explain your product features with tutorial videos.",
+    thumbnail: "/images/thumbnails/tutorial.jpg",
+    videoUrl: "/videos/tutorial.mp4",
+    gradient: "bg-gradient-to-r from-purple-500 to-pink-600"
+  },
+  {
+    id: 4,
+    title: "Social Ad",
+    description: "Create scroll-stopping ads for social media.",
+    thumbnail: "/images/thumbnails/social-ad.jpg",
+    videoUrl: "/videos/social-ad.mp4",
+    gradient: "bg-gradient-to-r from-pink-500 to-rose-600"
+  },
+  {
+    id: 5,
+    title: "Explainer",
+    description: "Explain complex topics with simple AI videos.",
+    thumbnail: "/images/thumbnails/explainer.jpg",
+    videoUrl: "/videos/explainer.mp4",
+    gradient: "bg-gradient-to-r from-red-500 to-orange-600"
+  },
+  {
+    id: 6,
+    title: "Product Showcase",
+    description: "Show off your products with vibrant videos.",
+    thumbnail: "/images/thumbnails/product-showcase.jpg",
+    videoUrl: "/videos/product-showcase.mp4",
+    gradient: "bg-gradient-to-r from-orange-500 to-amber-600"
+  }
+];
 
 const Landing = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -222,25 +275,15 @@ const Landing = () => {
               autoScrollInterval={3000}
               className="w-full"
             >
-              {Array.from({ length: 12 }).map((_, index) => (
-                <div key={index} className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow relative group">
-                  <div className="aspect-video bg-gradient-to-r from-indigo-500 to-purple-600 flex items-center justify-center">
-                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <div className="h-14 w-14 rounded-full bg-white/80 flex items-center justify-center">
-                        <Play className="h-8 w-8 text-primary" />
-                      </div>
-                    </div>
-                    <div className="relative">
-                      <span className="text-white/90 text-xl font-medium">
-                        {["Product Demo", "Testimonial", "Tutorial", "Ad", "Social Post", "Explainer"][index % 6]}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    <h3 className="font-semibold">AI UGC Video {index + 1}</h3>
-                    <p className="text-sm text-muted-foreground">Generate engaging {["product demos", "testimonials", "tutorials", "advertisements", "social posts", "explainer videos"][index % 6]} in seconds.</p>
-                  </div>
-                </div>
+              {SAMPLE_VIDEOS.map((video) => (
+                <VideoCard 
+                  key={video.id}
+                  title={video.title}
+                  description={video.description}
+                  thumbnail={video.thumbnail}
+                  videoUrl={video.videoUrl}
+                  gradient={video.gradient}
+                />
               ))}
             </AutoCarousel>
             
