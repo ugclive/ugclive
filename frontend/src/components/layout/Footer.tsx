@@ -1,7 +1,6 @@
-
-import { Film } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Separator } from "@/components/ui/separator";
+import LogoIcon from "../LogoIcon";
 
 const Footer = () => {
   return (
@@ -10,10 +9,8 @@ const Footer = () => {
         <div className="flex flex-col md:flex-row justify-between gap-8">
           <div className="space-y-4">
             <Link to="/" className="flex items-center gap-2">
-              <div className="flex justify-center items-center w-8 h-8 bg-black text-white rounded">
-                <Film size={16} />
-              </div>
-              <span className="text-lg font-semibold">Viral AI UGC</span>
+              <LogoIcon size={24} />
+              <span className="text-lg font-semibold">UGClive</span>
             </Link>
             <p className="text-sm text-muted-foreground max-w-xs">
               Transform your content creation with AI-powered video generation and editing tools.
@@ -57,7 +54,7 @@ const Footer = () => {
         <Separator />
         
         <div className="flex flex-col md:flex-row justify-between gap-4 text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Viral AI UGC. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} UGClive. All rights reserved.</p>
           <div className="flex gap-4">
             <Link to="/privacy" className="hover:text-foreground transition-colors">
               Privacy Policy
