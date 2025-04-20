@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -47,16 +46,12 @@ const App = () => {
           <SelfHostBanner />
           <BrowserRouter>
             <Routes>
-              <Route path="/landing" element={<Landing />} />
+              <Route path="/" element={<Landing />} />
               <Route path="/self-host" element={<SelfHost />} />
-              <Route
-                path="/"
-                element={<Navigate to="/dashboard" replace />}
-              />
               <Route
                 path="/dashboard"
                 element={
-                  <ProtectedRoute requireAuth={false}>
+                  <ProtectedRoute requireAuth={true}>
                     <Dashboard />
                   </ProtectedRoute>
                 }
