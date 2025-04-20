@@ -9,6 +9,7 @@ import AuthDialog from "@/components/AuthDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import LogoIcon from "@/components/LogoIcon";
 interface NavItemProps {
   icon: React.ReactNode;
   label: string;
@@ -81,10 +82,8 @@ const Navbar = () => {
   return <aside className="w-64 h-screen border-r border-border flex flex-col">
       <div className="p-6">
         <div className="flex items-center gap-2">
-          <div className="flex justify-center items-center w-8 h-8 bg-black text-white rounded">
-            <Film size={16} />
-          </div>
-          <h1 className="text-lg font-semibold">Viral AI UGC</h1>
+          <LogoIcon size={32} />
+          <h1 className="text-lg font-semibold">UGClive</h1>
         </div>
       </div>
       
