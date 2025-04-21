@@ -10,53 +10,63 @@ const LogoIcon = ({ size = 24, className = "" }) => {
       xmlns="http://www.w3.org/2000/svg"
       className={className}
     >
-      {/* Modern rounded square base */}
-      <rect
-        x="3"
-        y="4"
-        width="18"
-        height="16"
-        rx="4"
-        fill="url(#gradient1)"
+      {/* Futuristic hexagonal base */}
+      <path
+        d="M12 2L21 7V17L12 22L3 17V7L12 2Z"
+        fill="url(#futuristicGradient)"
         stroke="currentColor"
-        strokeWidth="1"
+        strokeWidth="0.5"
       />
       
-      {/* Stylized "UGC" text shape */}
+      {/* Stylized "UGC" letter */}
       <path
-        d="M7 8V13C7 14.1046 7.89543 15 9 15H11C12.1046 15 13 14.1046 13 13V8"
+        d="M8 8V13C8 13.5523 8.44772 14 9 14H10.5C11.0523 14 11.5 13.5523 11.5 13V8"
         stroke="white"
-        strokeWidth="1.5"
+        strokeWidth="1.2"
         strokeLinecap="round"
       />
       
-      {/* Live streaming element */}
+      {/* Live streaming triangle */}
       <path
-        d="M15 11L18 9V15L15 13V11Z"
+        d="M14 10.5L17 8.5V14.5L14 12.5V10.5Z"
         fill="white"
       />
       
-      {/* Live dot */}
-      <circle cx="19" cy="6" r="1.5" fill="#FF3B30" />
+      {/* Pulsing live dot with animated glow effect */}
+      <circle cx="18" cy="6" r="1.2" fill="#FF3B30">
+        <animate attributeName="opacity" values="1;0.6;1" dur="2s" repeatCount="indefinite" />
+      </circle>
       
-      {/* Signal waves */}
+      {/* Digital wave elements */}
       <path
-        d="M14 17C15.3333 16.3333 17 16.8 17 18"
-        stroke="white"
-        strokeWidth="1"
+        d="M7 16.5H17"
+        stroke="rgba(255,255,255,0.4)"
+        strokeWidth="0.5"
         strokeLinecap="round"
+        strokeDasharray="1 1"
       />
+      
       <path
-        d="M15 19C16.3333 18.3333 18 18.8 18 20"
-        stroke="rgba(255,255,255,0.7)"
-        strokeWidth="0.75"
+        d="M9 18H15"
+        stroke="rgba(255,255,255,0.3)"
+        strokeWidth="0.5"
         strokeLinecap="round"
+        strokeDasharray="1 1"
+      />
+      
+      {/* Holographic accent */}
+      <path
+        d="M12 5L14 6V7L12 8L10 7V6L12 5Z"
+        fill="rgba(255,255,255,0.3)"
+        stroke="rgba(255,255,255,0.5)"
+        strokeWidth="0.2"
       />
       
       <defs>
-        <linearGradient id="gradient1" x1="3" y1="4" x2="21" y2="20" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#4F46E5" />
-          <stop offset="1" stopColor="#7C3AED" />
+        <linearGradient id="futuristicGradient" x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#4338CA" />
+          <stop offset="0.5" stopColor="#6366F1" />
+          <stop offset="1" stopColor="#8B5CF6" />
         </linearGradient>
       </defs>
     </svg>

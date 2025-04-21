@@ -8,6 +8,9 @@ const { getCompositions, renderMedia } = require("@remotion/renderer");
 const generateDynamicVideo = require("../src/generateDynamicVideo");
 const { uploadToSupabase } = require("../libs/supabase/storage");
 
+// Import auth routes
+const authRoutes = require('./auth');
+
 // Create output directory if it doesn't exist
 const outputDir = path.resolve(__dirname, "../out");
 if (!fs.existsSync(outputDir)) {
@@ -22,6 +25,9 @@ app.use(cors());
 app.use(bodyParser.json({ limit: "50mb" })); // Increased limit for larger requests
 app.use("/videos", express.static(outputDir));
 app.use("/public", express.static(path.join(__dirname, "../public")));
+
+// Mount API routes
+app.use('/api/auth', authRoutes);
 
 // Test endpoint to verify props are being received correctly
 app.post("/test-props", (req, res) => {

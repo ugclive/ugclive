@@ -8,6 +8,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Landing from "./pages/Landing";
 import NotFound from "./pages/NotFound";
 import Dashboard from "./pages/Dashboard";
+import AdminDashboard from "./pages/AdminDashboard";
 import SelfHost from "./pages/SelfHost";
 import SelfHostBanner from "./components/SelfHostBanner";
 import { MobileWarningModal } from "./components/MobileWarningModal";
@@ -53,6 +54,14 @@ const App = () => {
                 element={
                   <ProtectedRoute requireAuth={true}>
                     <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute requireAuth={true}>
+                    <AdminDashboard />
                   </ProtectedRoute>
                 }
               />
