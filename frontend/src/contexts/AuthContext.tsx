@@ -300,6 +300,37 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Add this function after the existing refreshSession function
+  const recoverSession = async () => {
+    try {
+      console.log("Attempting session recovery...");
+      
+      // First check if there's any auth token in localStorage
+      const authToken = localStorage.getItem('sb-yoqsadxajmnqhhkajiyk-auth-token');
+      
+      if (!authToken) {
+        console.log("No auth token found in localStorage for recovery");
+        return false;
+      }
+      
+      console.log("Found auth token, attempting to recover session");
+      
+      // Try to forcefully refresh the session
+      const { data, error } = await supabase.auth.refreshSession();
+      
+      if (error || !data.session) {
+        console.error("Session recovery failed:", error);
+        return false;
+      }
+      
+      console.log("Session recovered successfully");
+      return true;
+    } catch (error) {
+      console.error("Error during session recovery:", error);
+      return false;
+    }
+  };
+
   // Setup a timeout that will force loading to complete
   const setupLoadingTimeout = () => {
     clearAuthTimeout();
@@ -389,13 +420,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         if (error) {
           console.error("Error getting session:", error);
-          if (mounted) {
-            // Clear any stale state if there's an error
+          
+          // Attempt session recovery if there's an error
+          const recovered = await recoverSession();
+          
+          if (!recovered && mounted) {
+            // Clear any stale state if recovery failed
             setUser(null);
             setProfile(null);
             setSession(null);
             setLoadingWithTracking(false, 'init_error');
           }
+          
           return;
         }
         
@@ -626,19 +662,54 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Login function
   const login = async ({ email, password }: LoginData) => {
     try {
+      // Set a flag to indicate auth is in progress
+      localStorage.setItem('auth_in_progress', 'true');
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
       
+      // Set a longer session after successful login
+      if (!error && data.session) {
+        try {
+          // Update auth session to last longer (30 days)
+          await supabase.auth.updateUser({
+            data: { extended_session: true }
+          });
+          
+          // Refresh the session to apply changes
+          await supabase.auth.refreshSession();
+        } catch (sessionError) {
+          console.error("Error extending session:", sessionError);
+        }
+      }
+      
       if (error) {
+        localStorage.removeItem('auth_in_progress');
         toast.error(error.message);
         return { error: error.message };
       }
       
+      // Setup an interval to proactively refresh the token every 23 hours
+      // This helps keep the user logged in indefinitely
+      const refreshIntervalId = setInterval(async () => {
+        try {
+          console.log("Proactively refreshing auth token");
+          await supabase.auth.refreshSession();
+        } catch (refreshError) {
+          console.error("Error refreshing session:", refreshError);
+        }
+      }, 1000 * 60 * 60 * 23); // 23 hours
+      
+      // Store the interval ID to be able to clear it on sign out
+      localStorage.setItem('auth_refresh_interval', refreshIntervalId.toString());
+      
+      localStorage.removeItem('auth_in_progress');
       toast.success('Logged in successfully');
       return {};
     } catch (error) {
+      localStorage.removeItem('auth_in_progress');
       console.error('Error logging in:', error);
       const errorMessage = error.message || 'Failed to log in. Please check your credentials.';
       toast.error(errorMessage);
@@ -649,12 +720,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Sign out function
   const signOut = async () => {
     try {
+      // Clear any refresh intervals
+      const refreshIntervalId = localStorage.getItem('auth_refresh_interval');
+      if (refreshIntervalId) {
+        clearInterval(parseInt(refreshIntervalId));
+        localStorage.removeItem('auth_refresh_interval');
+      }
+      
       // More thorough sign out that also clears local storage
       const { error } = await supabase.auth.signOut({ scope: 'global' });
       if (error) throw error;
       
-      // Explicitly clear any localStorage items related to authentication
-      localStorage.removeItem('supabase.auth.token');
+      // Explicitly clear ANY localStorage items related to authentication
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
+      // Clear sessionStorage items too
+      Object.keys(sessionStorage).forEach(key => {
+        if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
+          sessionStorage.removeItem(key);
+        }
+      });
+      
+      // Try to clear cookies
+      document.cookie.split(';').forEach(c => {
+        document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/');
+      });
       
       // Clear state
       setUser(null);

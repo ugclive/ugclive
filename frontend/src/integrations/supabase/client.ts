@@ -6,7 +6,7 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/config';
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-// Create the Supabase client with explicit persistence configuration
+// Create the Supabase client with enhanced persistence configuration
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
   SUPABASE_ANON_KEY,
@@ -15,7 +15,36 @@ export const supabase = createClient<Database>(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      flowType: 'implicit'
+      flowType: 'implicit',
+      storageKey: 'sb-yoqsadxajmnqhhkajiyk-auth-token',
+      storage: {
+        getItem: (key) => {
+          try {
+            const storedItem = localStorage.getItem(key);
+            if (storedItem) {
+              return storedItem;
+            }
+            return null;
+          } catch (error) {
+            console.error('Error accessing localStorage:', error);
+            return null;
+          }
+        },
+        setItem: (key, value) => {
+          try {
+            localStorage.setItem(key, value);
+          } catch (error) {
+            console.error('Error setting localStorage:', error);
+          }
+        },
+        removeItem: (key) => {
+          try {
+            localStorage.removeItem(key);
+          } catch (error) {
+            console.error('Error removing from localStorage:', error);
+          }
+        }
+      }
     },
     global: {
       headers: {
