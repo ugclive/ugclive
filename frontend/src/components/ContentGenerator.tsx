@@ -22,6 +22,38 @@ import {
 } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 
+// AWS Lambda API endpoint
+const API_URL = import.meta.env.VITE_API_URL;
+
+// Function to trigger video generation in AWS Lambda
+const triggerLambdaVideoGeneration = async (videoId, videoData) => {
+  try {
+    console.log(`Triggering Lambda video generation for ID: ${videoId}`);
+    const response = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: videoId,
+        data: videoData
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Lambda API error (${response.status}): ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log('Lambda API response:', data);
+    return data;
+  } catch (error) {
+    console.error('Error triggering Lambda video generation:', error);
+    throw error;
+  }
+};
+
 interface Sound {
   id: number;
   name: string;
@@ -148,7 +180,20 @@ const ContentGenerator = () => {
         throw error;
       }
 
-      toast.success("Video saved successfully!");
+      // After successfully creating the record, trigger the Lambda function
+      try {
+        const videoId = data[0].id;
+        console.log(`Record created in Supabase with ID: ${videoId}, now triggering Lambda`);
+        
+        // Call Lambda API directly
+        await triggerLambdaVideoGeneration(videoId, data[0]);
+        
+        toast.success("Video saved and processing started!");
+      } catch (lambdaError) {
+        console.error("Error triggering Lambda video generation:", lambdaError);
+        toast.error("Video saved but processing failed to start. It may start automatically later or you can try refreshing.");
+      }
+
       setVideoSavedDialogOpen(true);
     } catch (error: any) {
       console.error('Error saving generated video:', error);
