@@ -3,6 +3,45 @@ import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/config';
 
+// Enable verbose auth logging
+const DEBUG_AUTH = true;
+
+// Custom storage implementation with debugging
+const customStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      const storedItem = localStorage.getItem(key);
+      if (DEBUG_AUTH) {
+        console.log(`[AUTH] Reading from storage: ${key} =>`, storedItem ? `${storedItem.substring(0, 20)}...` : 'null');
+      }
+      return storedItem;
+    } catch (error) {
+      console.error('[AUTH] Error accessing localStorage:', error);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+      if (DEBUG_AUTH) {
+        console.log(`[AUTH] Stored in localStorage: ${key} => ${value.substring(0, 20)}...`);
+      }
+    } catch (error) {
+      console.error('[AUTH] Error setting localStorage:', error);
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      if (DEBUG_AUTH) {
+        console.log(`[AUTH] Removing from localStorage: ${key}`);
+      }
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error('[AUTH] Error removing from localStorage:', error);
+    }
+  }
+};
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
@@ -17,34 +56,8 @@ export const supabase = createClient<Database>(
       detectSessionInUrl: true,
       flowType: 'implicit',
       storageKey: 'sb-yoqsadxajmnqhhkajiyk-auth-token',
-      storage: {
-        getItem: (key) => {
-          try {
-            const storedItem = localStorage.getItem(key);
-            if (storedItem) {
-              return storedItem;
-            }
-            return null;
-          } catch (error) {
-            console.error('Error accessing localStorage:', error);
-            return null;
-          }
-        },
-        setItem: (key, value) => {
-          try {
-            localStorage.setItem(key, value);
-          } catch (error) {
-            console.error('Error setting localStorage:', error);
-          }
-        },
-        removeItem: (key) => {
-          try {
-            localStorage.removeItem(key);
-          } catch (error) {
-            console.error('Error removing from localStorage:', error);
-          }
-        }
-      }
+      storage: customStorage,
+      debug: DEBUG_AUTH
     },
     global: {
       headers: {
@@ -53,6 +66,50 @@ export const supabase = createClient<Database>(
     }
   }
 );
+
+// Diagnostic function to check auth state
+export const diagnoseAuthState = async () => {
+  try {
+    console.log('[AUTH] Running auth diagnostic...');
+    
+    // Check for auth token in storage
+    const token = localStorage.getItem('sb-yoqsadxajmnqhhkajiyk-auth-token');
+    console.log('[AUTH] Token exists in localStorage:', !!token);
+    
+    // Try to get current session
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    console.log('[AUTH] Current session:', sessionData?.session ? 'Valid' : 'None');
+    if (sessionError) {
+      console.error('[AUTH] Session error:', sessionError);
+    }
+    
+    // Try to get current user
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    console.log('[AUTH] Current user:', userData?.user ? `${userData.user.email}` : 'None');
+    if (userError) {
+      console.error('[AUTH] User error:', userError);
+    }
+    
+    // Log all auth-related items in storage
+    console.log('[AUTH] All auth storage items:');
+    Object.keys(localStorage).forEach(key => {
+      if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
+        console.log(`  ${key}: ${localStorage.getItem(key)?.substring(0, 20)}...`);
+      }
+    });
+    
+    return {
+      hasToken: !!token,
+      hasSession: !!sessionData?.session,
+      hasUser: !!userData?.user,
+      sessionError,
+      userError
+    };
+  } catch (error) {
+    console.error('[AUTH] Diagnostic error:', error);
+    return { error };
+  }
+};
 
 // Enable realtime functionality
 export const enableRealtimeForGeneratedVideos = async () => {

@@ -14,6 +14,8 @@ import SelfHostBanner from "./components/SelfHostBanner";
 import { MobileWarningModal } from "./components/MobileWarningModal";
 import ResetAuth from "./pages/ResetAuth";
 import ResetAuthPage from "./pages/ResetAuthPage";
+import { useEffect } from 'react';
+import { diagnoseAuthState } from '@/integrations/supabase/client';
 
 // Create a client with optimized settings
 const queryClient = new QueryClient({
@@ -41,6 +43,18 @@ const MobileWarningWrapper = () => {
 
 const App = () => {
   console.log("APP: Initializing app");
+  
+  // Add auth diagnostic on app startup
+  useEffect(() => {
+    const initializeAuth = async () => {
+      // Run auth diagnostics on app start
+      console.log('[AUTH] Running startup diagnostics...');
+      const result = await diagnoseAuthState();
+      console.log('[AUTH] Diagnostic result:', result);
+    };
+    
+    initializeAuth();
+  }, []);
   
   return (
     <QueryClientProvider client={queryClient}>
