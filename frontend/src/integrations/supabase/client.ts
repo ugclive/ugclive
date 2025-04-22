@@ -14,7 +14,13 @@ export const supabase = createClient<Database>(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      storageKey: 'supabase.auth.token',
+      detectSessionInUrl: true,
+      flowType: 'implicit'
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'ugclive-frontend'
+      }
     }
   }
 );

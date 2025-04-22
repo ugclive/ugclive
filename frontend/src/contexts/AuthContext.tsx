@@ -3,6 +3,67 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Session, User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 
+// Add this constant for enabling debug mode
+const AUTH_DEBUG = true;
+
+// Function for tracking auth state transitions - this can help identify loops
+function useAuthStateTracker() {
+  // Keep track of the last 10 auth state changes with timestamps
+  const [stateHistory, setStateHistory] = useState<Array<{
+    event: string;
+    hasSession: boolean;
+    hasUser: boolean;
+    hasProfile: boolean;
+    isLoading: boolean;
+    timestamp: Date;
+  }>>([]);
+
+  // Function to add a new state to the history
+  const trackState = (event: string, hasSession: boolean, hasUser: boolean, hasProfile: boolean, isLoading: boolean) => {
+    if (!AUTH_DEBUG) return;
+
+    setStateHistory(prev => {
+      // Keep only the last 10 items
+      const newHistory = [
+        {
+          event,
+          hasSession,
+          hasUser,
+          hasProfile,
+          isLoading,
+          timestamp: new Date()
+        },
+        ...prev
+      ].slice(0, 10);
+      
+      // Log to console
+      console.log(`AUTH DEBUG [${event}]: session=${hasSession}, user=${hasUser}, profile=${hasProfile}, loading=${isLoading}`);
+      
+      // Check for potential loops (same state change within a short period)
+      if (newHistory.length >= 2) {
+        const latest = newHistory[0];
+        const previous = newHistory[1];
+        
+        // If same event repeats quickly (within 3 seconds)
+        const timeDiff = latest.timestamp.getTime() - previous.timestamp.getTime();
+        if (
+          latest.event === previous.event && 
+          latest.hasSession === previous.hasSession &&
+          latest.hasUser === previous.hasUser &&
+          latest.isLoading === previous.isLoading &&
+          timeDiff < 3000
+        ) {
+          console.warn('⚠️ Possible authentication loop detected! Same state change twice within 3 seconds.');
+        }
+      }
+      
+      return newHistory;
+    });
+  };
+
+  return { stateHistory, trackState };
+}
+
 type Plan = 'free' | 'pro' | 'ultra';
 
 type Profile = {
@@ -60,11 +121,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
   const authTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const authAttemptCountRef = useRef(0);
   const sessionRefreshTimerRef = useRef<NodeJS.Timeout | null>(null);
   const healthCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
+  // Add state tracking for debugging
+  const { stateHistory, trackState } = useAuthStateTracker();
+  
+  // Custom setIsLoading that logs all state changes
+  const setLoadingWithTracking = (loading: boolean, event: string = 'manual_set') => {
+    trackState(event, session !== null, user !== null, profile !== null, loading);
+    setIsLoading(loading);
+  };
+
   // Clear any existing timeout to prevent memory leaks
   const clearAuthTimeout = () => {
     if (authTimeoutRef.current) {
@@ -292,11 +363,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     let mounted = true;
     
+    // Add keyboard shortcut for debug panel (Alt+D)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === 'd' && AUTH_DEBUG) {
+        setShowDebugPanel(prev => !prev);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    
     // Set initial timeout
     setupLoadingTimeout();
     
     // Setup health check
     setupHealthCheck();
+    
+    // Track initial state
+    trackState('init', false, false, false, true);
     
     const initAuth = async () => {
       try {
@@ -311,7 +394,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUser(null);
             setProfile(null);
             setSession(null);
-            setIsLoading(false);
+            setLoadingWithTracking(false, 'init_error');
           }
           return;
         }
@@ -340,6 +423,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (mounted) {
           setSession(data.session);
           setUser(data.session?.user || null);
+          trackState('set_session', data.session !== null, data.session?.user !== null, false, isLoading);
           
           // Setup session refresh check if we have a session
           if (data.session) {
@@ -348,7 +432,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           
           if (!data.session) {
             console.log("No active session found");
-            setIsLoading(false);
+            setLoadingWithTracking(false, 'no_session');
             return;
           }
         }
@@ -361,16 +445,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (userProfile) {
               console.log("Profile loaded successfully");
               setProfile(userProfile);
+              trackState('profile_loaded', true, true, true, isLoading);
             } else {
               console.warn("No profile found for user");
             }
             // Always make sure loading state is reset
-            setIsLoading(false);
+            setLoadingWithTracking(false, 'init_complete');
           }
         } else if (mounted) {
           // No session or user, explicitly clear profile and set loading to false
           setProfile(null);
-          setIsLoading(false);
+          setLoadingWithTracking(false, 'no_user');
         }
       } catch (error) {
         console.error("Unexpected error during initialization:", error);
@@ -379,7 +464,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUser(null);
           setProfile(null);
           setSession(null);
-          setIsLoading(false);
+          setLoadingWithTracking(false, 'init_exception');
         }
       }
     };
@@ -389,6 +474,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
         console.log("Auth state changed:", event, newSession ? "with session" : "no session");
+        trackState(`event_${event}`, newSession !== null, newSession?.user !== null, profile !== null, isLoading);
         
         // Log session expiry information for debugging when we get a new session
         if (newSession) {
@@ -419,7 +505,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           
           // Only set loading to true if we have a session
           if (newSession) {
-            setIsLoading(true);
+            setLoadingWithTracking(true, `loading_${event}`);
           }
         }
         
@@ -439,6 +525,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             
             if (!isValid) {
               console.warn('User has no valid profile, attempting to fix');
+              trackState('profile_invalid', true, true, false, true);
               // Attempt to create/fix the profile by fetching it again
               // This will retry the fetchProfile which may trigger the database's handle_new_user function
               await new Promise(resolve => setTimeout(resolve, 1000)); // Small delay to ensure DB triggers have time
@@ -458,25 +545,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (mounted) {
               if (userProfile) {
                 setProfile(userProfile);
+                trackState('profile_set', true, true, true, isLoading);
               } else {
                 console.error('Failed to retrieve or create user profile');
                 toast.error('Error loading your profile. Please try again or contact support.');
+                trackState('profile_failed', true, true, false, isLoading);
               }
               // Always make sure loading state is reset
-              setIsLoading(false);
+              setLoadingWithTracking(false, `${event}_complete`);
             }
           } catch (error) {
             console.error('Error in auth state change handler:', error);
             if (mounted) {
               // Ensure loading state is reset on error
-              setIsLoading(false);
+              setLoadingWithTracking(false, `${event}_error`);
               toast.error('Authentication error. Please try again.');
             }
           }
         } else if (mounted) {
           // No session means we should clear the profile
           setProfile(null);
-          setIsLoading(false);
+          setLoadingWithTracking(false, `${event}_no_session`);
           
           // If the event is a sign-out, ensure we clear any cached data
           if (event === 'SIGNED_OUT') {
@@ -499,6 +588,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (healthCheckIntervalRef.current) {
         clearInterval(healthCheckIntervalRef.current);
       }
+      // Remove keyboard event listener
+      window.removeEventListener('keydown', handleKeyDown);
       // Unsubscribe from auth changes
       subscription.unsubscribe();
     };
@@ -650,23 +741,106 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        session,
-        user,
-        profile,
-        isLoading,
-        isAdmin: profile?.username === 'admin',
-        signUp,
-        login,
-        signOut,
-        forgotPassword,
-        resetPassword,
-        updateProfile,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+    <>
+      <AuthContext.Provider
+        value={{
+          session,
+          user,
+          profile,
+          isLoading,
+          isAdmin: profile?.username === 'admin',
+          signUp,
+          login,
+          signOut,
+          forgotPassword,
+          resetPassword,
+          updateProfile,
+        }}
+      >
+        {children}
+      </AuthContext.Provider>
+      
+      {/* Debug panel - only visible when AUTH_DEBUG is true and triggered with Alt+D */}
+      {AUTH_DEBUG && showDebugPanel && (
+        <div 
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            right: 0,
+            width: '400px',
+            maxHeight: '300px',
+            background: 'rgba(0, 0, 0, 0.8)',
+            color: 'white',
+            padding: '10px',
+            fontSize: '12px',
+            fontFamily: 'monospace',
+            zIndex: 9999,
+            overflow: 'auto',
+            border: '1px solid #444',
+            borderRadius: '4px 0 0 0'
+          }}
+        >
+          <div style={{ marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <strong>Auth Debug (Alt+D to hide)</strong>
+            <div>
+              <button 
+                onClick={() => resetAuthState()} 
+                style={{ 
+                  background: '#f44336', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: '2px', 
+                  padding: '2px 8px', 
+                  fontSize: '10px',
+                  cursor: 'pointer'
+                }}
+              >
+                Reset Auth
+              </button>
+              <button 
+                onClick={() => refreshSession()} 
+                style={{ 
+                  background: '#4caf50', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: '2px', 
+                  padding: '2px 8px', 
+                  fontSize: '10px',
+                  marginLeft: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Refresh Token
+              </button>
+            </div>
+          </div>
+          <div style={{ marginBottom: '8px' }}>
+            <div>Session: <span style={{ color: session ? '#4caf50' : '#f44336' }}>{session ? 'Yes' : 'No'}</span></div>
+            <div>User: <span style={{ color: user ? '#4caf50' : '#f44336' }}>{user ? 'Yes' : 'No'}</span></div>
+            <div>Profile: <span style={{ color: profile ? '#4caf50' : '#f44336' }}>{profile ? 'Yes' : 'No'}</span></div>
+            <div>Loading: <span style={{ color: isLoading ? '#ff9800' : '#4caf50' }}>{isLoading ? 'Yes' : 'No'}</span></div>
+          </div>
+          <div style={{ borderTop: '1px solid #444', paddingTop: '6px' }}>
+            <strong>State History:</strong>
+            <div style={{ maxHeight: '180px', overflow: 'auto' }}>
+              {stateHistory.map((item, i) => (
+                <div key={i} style={{ marginBottom: '6px', paddingBottom: '6px', borderBottom: '1px dotted #333' }}>
+                  <div style={{ color: '#ff9800' }}>
+                    {item.timestamp.toLocaleTimeString()} - {item.event}
+                  </div>
+                  <div style={{ fontSize: '10px', color: '#aaa' }}>
+                    session={item.hasSession ? 'yes' : 'no'}, 
+                    user={item.hasUser ? 'yes' : 'no'}, 
+                    profile={item.hasProfile ? 'yes' : 'no'}, 
+                    loading={item.isLoading ? 'yes' : 'no'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
