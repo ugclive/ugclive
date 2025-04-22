@@ -81,6 +81,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Add this new validation function after the fetchProfile function
+  const validateUserProfile = async (userId: string): Promise<boolean> => {
+    try {
+      // Check if profile exists
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+        
+      if (profileError || !profile) {
+        console.error('Profile validation failed:', profileError);
+        return false;
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error validating user profile:', error);
+      return false;
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
     
@@ -139,6 +161,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       async (event, newSession) => {
         console.log("Auth state changed:", event);
         
+        // Clear the auth in progress flag whenever auth state changes
+        localStorage.removeItem('auth_in_progress');
+        
         if (mounted) {
           setSession(newSession);
           setUser(newSession?.user || null);
@@ -148,14 +173,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
         
         if (newSession?.user && mounted) {
+          // Validate that the user has a profile
+          const isValid = await validateUserProfile(newSession.user.id);
+          
+          if (!isValid) {
+            console.warn('User has no valid profile, attempting to fix');
+            // Attempt to create/fix the profile by fetching it again
+            // This will retry the fetchProfile which may trigger the database's handle_new_user function
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Small delay to ensure DB triggers have time
+          }
+          
           const userProfile = await fetchProfile(newSession.user.id);
           if (mounted && userProfile) {
             setProfile(userProfile);
             // Always make sure loading state is reset
             setIsLoading(false);
+          } else if (mounted) {
+            // If still no profile, this is a problem
+            console.error('Failed to retrieve or create user profile');
+            toast.error('Error loading your profile. Please try again or contact support.');
+            setIsLoading(false);
           }
-          // Always set loading to false after profile fetch attempt
-          if (mounted) setIsLoading(false);
         } else if (!newSession && mounted) {
           // No session means we should clear the profile
           setProfile(null);

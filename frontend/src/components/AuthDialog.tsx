@@ -1,5 +1,4 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,9 +14,20 @@ interface AuthDialogProps {
 const AuthDialog = ({ isOpen, onClose }: AuthDialogProps) => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Clear any stale auth state on component mount
+  useEffect(() => {
+    if (isOpen) {
+      localStorage.removeItem('auth_in_progress');
+    }
+  }, [isOpen]);
+
   const handleGoogleSignIn = async () => {
     try {
       setIsLoggingIn(true);
+      
+      // Set a flag in localStorage to detect abandoned flows
+      localStorage.setItem('auth_in_progress', 'true');
+      
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
@@ -26,9 +36,14 @@ const AuthDialog = ({ isOpen, onClose }: AuthDialogProps) => {
       });
 
       if (error) throw error;
+      
+      // Note: The flag will be cleared by AuthContext when auth state changes
     } catch (error) {
       console.error("Error signing in with Google:", error);
       toast.error("Failed to sign in with Google. Please try again.");
+      
+      // Clear the flag on error
+      localStorage.removeItem('auth_in_progress');
     } finally {
       setIsLoggingIn(false);
     }
