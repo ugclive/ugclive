@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import { 
@@ -7,6 +6,30 @@ import {
   PopoverTrigger 
 } from "@/components/ui/popover";
 import { Settings } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+const resetAuthState = async () => {
+  try {
+    localStorage.clear();
+    sessionStorage.clear();
+    
+    document.cookie.split(";").forEach(function(c) {
+      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+    });
+    
+    await supabase.auth.signOut({ scope: 'global' });
+    
+    toast.success("Authentication reset. Refreshing page...");
+    
+    setTimeout(() => {
+      window.location.href = "/";
+    }, 1000);
+  } catch (error) {
+    console.error("Error resetting auth:", error);
+    toast.error("Failed to reset authentication state.");
+  }
+};
 
 const UserMenu = () => {
   const { user, signOut } = useAuth();
@@ -50,6 +73,13 @@ const UserMenu = () => {
               >
                 Sign Out
               </Button>
+              
+              <button 
+                onClick={resetAuthState}
+                className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-100"
+              >
+                Reset Auth (Troubleshoot)
+              </button>
             </div>
           </PopoverContent>
         </Popover>

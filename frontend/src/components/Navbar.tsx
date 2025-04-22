@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import LogoIcon from "@/components/LogoIcon";
+import { toast } from "sonner";
 
 interface NavItemProps {
   icon: React.ReactNode;
@@ -97,6 +98,26 @@ const Navbar = () => {
   useEffect(() => {
     fetchUserProfile();
   }, [user]);
+
+  const forceResetAuth = async () => {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      document.cookie.split(";").forEach(function(c) {
+        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+      });
+      
+      toast.success("Auth state reset. Reloading page...");
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1000);
+    } catch (error) {
+      console.error("Error resetting auth:", error);
+      toast.error("Failed to reset auth state");
+    }
+  };
+
   return <aside className="w-64 h-screen border-r border-border flex flex-col">
       <div className="p-6">
         <div className="flex items-center gap-2">

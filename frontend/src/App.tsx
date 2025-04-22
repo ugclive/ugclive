@@ -12,6 +12,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import SelfHost from "./pages/SelfHost";
 import SelfHostBanner from "./components/SelfHostBanner";
 import { MobileWarningModal } from "./components/MobileWarningModal";
+import ResetAuth from "./pages/ResetAuth";
 
 // Create a client with optimized settings
 const queryClient = new QueryClient({
@@ -49,6 +50,7 @@ const App = () => {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/self-host" element={<SelfHost />} />
+              <Route path="/reset-auth" element={<ResetAuth />} />
               <Route
                 path="/dashboard"
                 element={
