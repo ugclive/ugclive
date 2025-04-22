@@ -1,4 +1,3 @@
-
 import { ReactNode, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
@@ -17,7 +16,7 @@ const ProtectedRoute = ({ children, requireAuth = false }: ProtectedRouteProps) 
     // Only redirect after auth is loaded and if requireAuth is true
     if (!isLoading && requireAuth && !user) {
       console.log("PROTECTED ROUTE: Redirecting unauthenticated user from protected route");
-      navigate("/landing", { replace: true });
+      navigate("/", { replace: true });
     }
   }, [isLoading, user, requireAuth, navigate]);
 

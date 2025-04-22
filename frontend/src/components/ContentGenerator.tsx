@@ -5,7 +5,6 @@ import HookInput from "./HookInput";
 import AvatarGrid from "./AvatarGrid";
 import ContentPreview from "./ContentPreview";
 import AudioSelector from "./AudioSelector";
-import AuthDialog from "./AuthDialog";
 import DemoGrid from "./DemoGrid";
 import DemoUploader from "./DemoUploader";
 import { toast } from "sonner";
@@ -34,6 +33,24 @@ interface Demo {
   demo_link: string;
 }
 
+const handleAuth = async () => {
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+      },
+    });
+    
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error signing in:', error);
+    toast.error(error.message || "An error occurred while signing in");
+  }
+};
+
 const ContentGenerator = () => {
   const [hook, setHook] = useState("");
   const [selectedAvatar, setSelectedAvatar] = useState<number | null>(null);
@@ -41,7 +58,6 @@ const ContentGenerator = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [audioSelectorOpen, setAudioSelectorOpen] = useState(false);
   const [selectedSound, setSelectedSound] = useState<Sound | null>(null);
-  const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const [selectedDemo, setSelectedDemo] = useState<number | null>(null);
   const [isUploadingDemo, setIsUploadingDemo] = useState(false);
   const [selectedDemoLink, setSelectedDemoLink] = useState<string | null>(null);
@@ -144,7 +160,7 @@ const ContentGenerator = () => {
 
   const handleGenerate = () => {
     if (!user) {
-      setAuthDialogOpen(true);
+      handleAuth();
       return;
     }
     
@@ -173,7 +189,7 @@ const ContentGenerator = () => {
 
   const handleOpenAudioSelector = () => {
     if (!user) {
-      setAuthDialogOpen(true);
+      handleAuth();
       return;
     }
     setAudioSelectorOpen(true);
@@ -190,7 +206,7 @@ const ContentGenerator = () => {
 
   const handleAddDemo = () => {
     if (!user) {
-      setAuthDialogOpen(true);
+      handleAuth();
       return;
     }
     setIsUploadingDemo(true);
@@ -457,11 +473,6 @@ const ContentGenerator = () => {
         isOpen={audioSelectorOpen}
         onClose={() => setAudioSelectorOpen(false)}
         onSelect={handleSelectSound}
-      />
-      
-      <AuthDialog 
-        isOpen={authDialogOpen}
-        onClose={() => setAuthDialogOpen(false)}
       />
 
       <Dialog open={videoSavedDialogOpen} onOpenChange={setVideoSavedDialogOpen}>

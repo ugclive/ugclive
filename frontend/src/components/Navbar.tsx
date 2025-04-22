@@ -5,11 +5,11 @@ import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
-import AuthDialog from "@/components/AuthDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import LogoIcon from "@/components/LogoIcon";
+
 interface NavItemProps {
   icon: React.ReactNode;
   label: string;
@@ -18,6 +18,7 @@ interface NavItemProps {
   disabled?: boolean;
   onClick?: () => void;
 }
+
 const NavItem = ({
   icon,
   label,
@@ -52,6 +53,24 @@ const NavItem = ({
       </div>
     </Link>;
 };
+
+const handleAuth = async () => {
+  try {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/dashboard`,
+      },
+    });
+    
+    if (error) {
+      throw error;
+    }
+  } catch (error) {
+    console.error('Error signing in:', error);
+  }
+};
+
 const Navbar = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -60,7 +79,6 @@ const Navbar = () => {
     user,
     signOut
   } = useAuth();
-  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<{
     plan: string;
     credits?: number;
@@ -166,13 +184,12 @@ const Navbar = () => {
               </Button>}
           </div> : <div className="space-y-2">
             <p className="text-sm font-medium">Not signed in</p>
-            <Button variant="default" size="sm" className="w-full" onClick={() => setIsAuthDialogOpen(true)}>
+            <Button variant="default" size="sm" className="w-full" onClick={handleAuth}>
               Sign Up
             </Button>
           </div>}
       </div>
-      
-      <AuthDialog isOpen={isAuthDialogOpen} onClose={() => setIsAuthDialogOpen(false)} />
     </aside>;
 };
+
 export default Navbar;
