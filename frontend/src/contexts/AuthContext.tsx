@@ -194,7 +194,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             toast.error('Error loading your profile. Please try again or contact support.');
             setIsLoading(false);
           }
-        } else if (!newSession && mounted) {
+        } else if (mounted) {
           // No session means we should clear the profile
           setProfile(null);
           setIsLoading(false);

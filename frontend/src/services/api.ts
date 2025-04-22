@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { API_URL } from '@/config';
+import { supabase } from '@/integrations/supabase/client';
 
 // Create an instance of axios
 const api = axios.create({
@@ -13,14 +14,12 @@ const api = axios.create({
 api.interceptors.request.use(
   async (config) => {
     try {
-      // Try to get session from localStorage to avoid circular dependency with auth context
-      const storedSession = localStorage.getItem('supabase.auth.token');
+      // Get session directly from Supabase instead of localStorage
+      const { data } = await supabase.auth.getSession();
+      const session = data.session;
       
-      if (storedSession) {
-        const session = JSON.parse(storedSession);
-        if (session?.currentSession?.access_token) {
-          config.headers.Authorization = `Bearer ${session.currentSession.access_token}`;
-        }
+      if (session?.access_token) {
+        config.headers.Authorization = `Bearer ${session.access_token}`;
       }
       
       return config;
