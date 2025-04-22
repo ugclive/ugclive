@@ -86,32 +86,49 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     const initAuth = async () => {
       try {
+        // First check if there is a valid session
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error("Error getting session:", error);
-          if (mounted) setIsLoading(false);
+          if (mounted) {
+            setIsLoading(false);
+            // Clear any stale state if there's an error
+            setUser(null);
+            setProfile(null);
+            setSession(null);
+          }
           return;
         }
         
         if (mounted) {
           setSession(data.session);
           setUser(data.session?.user || null);
-          
-          setIsLoading(false);
         }
         
         if (data.session?.user && mounted) {
           const userProfile = await fetchProfile(data.session.user.id);
           if (mounted && userProfile) {
             setProfile(userProfile);
+            // Always make sure loading state is reset
+            setIsLoading(false);
+          } else if (mounted) {
+            // If no profile found, still need to reset loading state
+            setIsLoading(false);
           }
+        } else if (mounted) {
+          // No session or user, explicitly clear profile and set loading to false
+          setProfile(null);
+          setIsLoading(false);
         }
       } catch (error) {
         console.error("Unexpected error during initialization:", error);
-      } finally {
         if (mounted) {
           setIsLoading(false);
+          // Clear any stale state on error
+          setUser(null);
+          setProfile(null);
+          setSession(null);
         }
       }
     };
@@ -120,20 +137,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
+        console.log("Auth state changed:", event);
+        
         if (mounted) {
           setSession(newSession);
           setUser(newSession?.user || null);
           
-          setIsLoading(false);
+          // Set loading back to true briefly when auth state changes
+          setIsLoading(true);
         }
         
         if (newSession?.user && mounted) {
           const userProfile = await fetchProfile(newSession.user.id);
           if (mounted && userProfile) {
             setProfile(userProfile);
+            // Always make sure loading state is reset
+            setIsLoading(false);
           }
+          // Always set loading to false after profile fetch attempt
+          if (mounted) setIsLoading(false);
         } else if (!newSession && mounted) {
+          // No session means we should clear the profile
           setProfile(null);
+          setIsLoading(false);
+          
+          // If the event is a sign-out, ensure we clear any cached data
+          if (event === 'SIGNED_OUT') {
+            localStorage.removeItem('supabase.auth.token');
+          }
         }
       }
     );
@@ -198,10 +229,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Sign out function
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
+      // More thorough sign out that also clears local storage
+      const { error } = await supabase.auth.signOut({ scope: 'global' });
       if (error) throw error;
-      toast.success("Signed out successfully");
+      
+      // Explicitly clear any localStorage items related to authentication
+      localStorage.removeItem('supabase.auth.token');
+      
+      // Clear state
+      setUser(null);
       setProfile(null);
+      setSession(null);
+      
+      toast.success("Signed out successfully");
     } catch (error) {
       console.error('Error signing out:', error);
       toast.error("Failed to sign out");
