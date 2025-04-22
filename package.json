@@ -1,0 +1,11 @@
+{
+  "name": "ugclive",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "18.x"
+  },
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build"
+  }
+} 
