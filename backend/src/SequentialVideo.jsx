@@ -71,7 +71,7 @@ export const SequentialVideo = ({
             />
 
             {/* Title text - only shown during first video if titleText exists */}
-            {titleText && (
+            {titleText && titleText !== "" && (
               <div
                 style={{
                   position: "absolute",

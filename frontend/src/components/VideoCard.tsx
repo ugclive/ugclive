@@ -54,6 +54,20 @@ const getErrorMessage = (error: any): string => {
 };
 
 const VideoCard = ({ video }: VideoCardProps) => {
+  // Immediately return a placeholder if video is undefined or null
+  if (!video) {
+    return (
+      <div className="overflow-hidden rounded-xl border bg-card text-card-foreground shadow">
+        <div className="aspect-video bg-muted flex items-center justify-center">
+          <p className="text-muted-foreground">Video data unavailable</p>
+        </div>
+        <div className="p-4">
+          <p className="text-sm text-muted-foreground">Unable to load video data</p>
+        </div>
+      </div>
+    );
+  }
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -89,7 +103,7 @@ const VideoCard = ({ video }: VideoCardProps) => {
   };
 
   // Create a title from caption or default text
-  const title = video.caption || "Generated Video";
+  const title = video?.caption || "Generated Video";
   
   // Generate a default description based on status
   const getDescription = () => {

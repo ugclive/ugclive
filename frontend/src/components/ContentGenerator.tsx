@@ -158,7 +158,7 @@ const ContentGenerator = () => {
         demo: selectedDemoLink,
         template: selectedTemplate.video_link,
         videotype: "aiugc",
-        caption: hook
+        caption: hook || ""
       };
 
       const { data, error } = await supabase
@@ -172,7 +172,7 @@ const ContentGenerator = () => {
           template_id: selectedTemplate ? Number(selectedTemplate.id) : null,
           demo_id: selectedDemo,
           remotion: remotionData,
-          caption: hook
+          caption: hook || ""
         })
         .select();
 

@@ -112,7 +112,7 @@ async function handleVideoGeneration(id, data, outputDir) {
 
     // Map fields based on provided mapping
     const audioOffsetInSeconds = remotionData.audio_offset || 0;
-    const titleText = remotionData.caption || "Default Title";
+    const titleText = remotionData?.caption || "Default Title";
     const textPosition = data.text_alignment || "bottom";
     const videoSource = remotionData.template || null;
     const demoVideoSource = remotionData.demo || null;
