@@ -18,7 +18,7 @@ const getProjectRef = () => {
 };
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, profile, isLoading, signOut, refreshSession, diagnoseAuth } = useAuth();
+  const { user, profile, isLoading, signOut, refreshSession, diagnoseAuth, clearAllStorageData } = useAuth();
   const location = useLocation();
   
   // Simplified state - only what's truly needed
@@ -34,26 +34,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     // First sign out from supabase
     await signOut();
     
-    // Clear localStorage
-    localStorage.clear();
-    
-    // Clear sessionStorage
-    sessionStorage.clear();
-    
-    // Get the project ref for cookie clearing
-    const projectRef = getProjectRef();
-    
-    // Clear cookies (with special focus on auth cookies)
-    document.cookie.split(";").forEach((c) => {
-      const cookieName = c.split("=")[0].trim();
-      document.cookie = `${cookieName}=;expires=${new Date().toUTCString()};path=/`;
-      // Also try with secure flag and different paths to ensure complete removal
-      document.cookie = `${cookieName}=;expires=${new Date().toUTCString()};path=/;secure`;
-      document.cookie = `${cookieName}=;expires=${new Date().toUTCString()};path=/;secure;SameSite=Lax`;
-    });
-    
-    // Specifically clear the project-specific auth token
-    document.cookie = `sb-${projectRef}-auth-token=;expires=${new Date().toUTCString()};path=/;secure;SameSite=Lax`;
+    // Use the clearAllStorageData utility
+    clearAllStorageData();
     
     // Reload the page to ensure a clean state
     window.location.href = "/";
@@ -133,12 +115,23 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
             <p className="text-muted-foreground mb-2">
               Taking too long? There might be an issue with your session.
             </p>
-            <button
-              onClick={clearAllBrowserData}
-              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90"
-            >
-              Reset Authentication
-            </button>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={clearAllBrowserData}
+                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90"
+              >
+                Reset Authentication
+              </button>
+              <button
+                onClick={() => {
+                  clearAllStorageData();
+                  window.location.reload();
+                }}
+                className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90"
+              >
+                Clear Storage Only
+              </button>
+            </div>
           </div>
         )}
         
@@ -163,6 +156,21 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
                 2
               )}
             </pre>
+            
+            <div className="flex gap-2 mt-4 justify-end">
+              <button
+                onClick={() => refreshSession().then(() => diagnoseAuth().then(setDebugInfo))}
+                className="px-2 py-1 bg-primary/10 text-primary rounded text-xs"
+              >
+                Refresh Session
+              </button>
+              <button
+                onClick={clearAllBrowserData}
+                className="px-2 py-1 bg-destructive/10 text-destructive rounded text-xs"
+              >
+                Reset Auth
+              </button>
+            </div>
           </div>
         )}
       </div>

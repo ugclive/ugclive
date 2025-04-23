@@ -31,6 +31,7 @@ type AuthContextType = AuthState & {
   refreshSession: () => Promise<boolean>;
   updateProfile: (updates: Partial<Profile>) => Promise<{ error?: string, profile?: Profile }>;
   diagnoseAuth: () => Promise<any>;
+  clearAllStorageData: () => boolean;
 };
 
 // Enable debugging
@@ -394,6 +395,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       logAuth('Attempting login', { email });
       
+      // Clear any existing tokens first
+      const projectRef = SUPABASE_URL.split('.')[0].replace('https://', '');
+      const storageKey = `sb-${projectRef}-auth-token`;
+      localStorage.removeItem(storageKey);
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -404,23 +410,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: error.message };
       }
       
-      // After successful login, update auth state
-      updateState({ session: data.session, user: data.session!.user });
-      
-      // Try to extend the session
-      try {
-        await supabase.auth.updateUser({
-          data: { extended_session: true }
-        });
+      // Force storage of the session token - sometimes Supabase doesn't do this correctly
+      if (data.session) {
+        // Store session token manually as a backup
+        localStorage.setItem(storageKey, JSON.stringify({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+          expires_at: data.session.expires_at
+        }));
         
-        // Refresh to apply changes
-        await refreshSession();
-      } catch (sessionError) {
-        console.error("Error extending session:", sessionError);
+        // After successful login, update auth state
+        updateState({ session: data.session, user: data.session.user });
+        
+        // Try to extend the session
+        try {
+          await supabase.auth.updateUser({
+            data: { extended_session: true }
+          });
+          
+          // Refresh to apply changes
+          await refreshSession();
+        } catch (sessionError) {
+          console.error("Error extending session:", sessionError);
+        }
+        
+        toast.success('Logged in successfully');
+        return {};
+      } else {
+        toast.error('Login successful but no session was created');
+        return { error: 'No session created' };
       }
-      
-      toast.success('Logged in successfully');
-      return {};
     } catch (error: any) {
       console.error('Error logging in:', error);
       toast.error(error.message || 'Failed to log in');
@@ -518,6 +537,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return await diagnoseAuthState();
   };
   
+  // Utility function to clear all storage data - useful for troubleshooting
+  const clearAllStorageData = () => {
+    try {
+      logAuth('Clearing all storage data');
+      
+      // Clear localStorage
+      localStorage.clear();
+      
+      // Clear sessionStorage
+      sessionStorage.clear();
+      
+      // Clear cookies
+      document.cookie.split(';').forEach(cookie => {
+        const name = cookie.split('=')[0].trim();
+        document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure; SameSite=Lax`;
+      });
+      
+      logAuth('All storage data cleared');
+      return true;
+    } catch (error) {
+      console.error('Error clearing storage data:', error);
+      return false;
+    }
+  };
+  
   // Build context value
   const contextValue: AuthContextType = {
     ...state,
@@ -526,7 +570,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signOut,
     refreshSession,
     updateProfile,
-    diagnoseAuth
+    diagnoseAuth,
+    clearAllStorageData
   };
   
   return (
