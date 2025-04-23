@@ -30,6 +30,7 @@ export const supabase = createClient<Database>(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+      detectSessionInUrl: false,
       storageKey: STORAGE_KEY,
       storage: {
         getItem: (key) => {
@@ -46,12 +47,21 @@ export const supabase = createClient<Database>(
             return cookieValue ? decodeURIComponent(cookieValue) : null;
           } catch (e) {
             console.error('[AUTH] Error getting cookie:', e);
-            return null;
+            // As a fallback, try localStorage
+            const fallbackValue = localStorage.getItem(key);
+            if (fallbackValue && DEBUG_AUTH) {
+              console.log(`[AUTH] Fallback to localStorage for ${key}`);
+            }
+            return fallbackValue;
           }
         },
         setItem: (key, value) => {
           try {
+            // First, store in localStorage as fallback
+            localStorage.setItem(key, value);
+            
             const encodedValue = encodeURIComponent(value);
+            // Set cookie with proper SameSite and expiration
             document.cookie = `${key}=${encodedValue}; path=/; secure; SameSite=Lax; max-age=${60 * 60 * 24 * 7}`;
             
             if (DEBUG_AUTH) {
@@ -63,6 +73,8 @@ export const supabase = createClient<Database>(
         },
         removeItem: (key) => {
           try {
+            // Remove from both storage mechanisms
+            localStorage.removeItem(key);
             document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure; SameSite=Lax`;
             
             if (DEBUG_AUTH) {
@@ -77,7 +89,8 @@ export const supabase = createClient<Database>(
     },
     global: {
       headers: {
-        'X-Client-Info': 'ugclive-frontend'
+        'X-Client-Info': 'ugclive-frontend',
+        'Content-Type': 'application/json'
       }
     }
   }
@@ -94,6 +107,10 @@ export const diagnoseAuthState = async () => {
       .some(row => row.startsWith(`${STORAGE_KEY}=`));
     console.log('[AUTH] Token exists in cookies:', hasCookie);
     
+    // Check for localStorage fallback
+    const hasLocalStorage = !!localStorage.getItem(STORAGE_KEY);
+    console.log('[AUTH] Token exists in localStorage:', hasLocalStorage);
+    
     // Try to get current session
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     console.log('[AUTH] Current session:', sessionData?.session ? 'Valid' : 'None');
@@ -108,17 +125,26 @@ export const diagnoseAuthState = async () => {
       console.error('[AUTH] User error:', userError);
     }
     
-    // Log all auth-related cookies
-    console.log('[AUTH] All auth cookies:');
+    // Log all auth-related storage
+    console.log('[AUTH] Auth storage:');
+    
+    // Check cookies
     document.cookie.split('; ').forEach(cookie => {
       const [name, value] = cookie.split('=');
       if (name.includes('supabase') || name.includes('sb-') || name.includes('auth')) {
-        console.log(`  ${name}: ${value ? `${value.substring(0, 20)}...` : 'empty'}`);
+        console.log(`  Cookie: ${name}: ${value ? `${value.substring(0, 20)}...` : 'empty'}`);
+      }
+    });
+    
+    // Check localStorage
+    Object.keys(localStorage).forEach(key => {
+      if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
+        console.log(`  LocalStorage: ${key}: ${localStorage.getItem(key)?.substring(0, 20)}...`);
       }
     });
     
     return {
-      hasToken: hasCookie,
+      hasToken: hasCookie || hasLocalStorage,
       hasSession: !!sessionData?.session,
       hasUser: !!userData?.user,
       sessionError,

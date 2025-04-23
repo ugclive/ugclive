@@ -80,33 +80,68 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         if (error.code === 'PGRST116' || error.message?.includes('not found')) {
           logAuth('Profile not found, attempting to create one');
           
-          // Get user details to use for profile creation
-          const { data: userData } = await supabase.auth.getUser();
-          const email = userData?.user?.email || '';
-          const username = userData?.user?.user_metadata?.username || email?.split('@')[0] || 'user';
-          
-          // Create a default profile
-          const { data: newProfile, error: createError } = await supabase
-            .from('profiles')
-            .insert({
-              id: userId,
-              username: username,
-              email: email,
-              credits: 3, // Default starting credits
-              plan: 'free', // Default plan
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
-          
-          if (createError) {
-            console.error('[AUTH] Error creating profile:', createError);
+          try {
+            // Get user details to use for profile creation
+            const { data: userData } = await supabase.auth.getUser();
+            const email = userData?.user?.email || '';
+            const username = userData?.user?.user_metadata?.username || email?.split('@')[0] || 'user';
+            
+            // Create a default profile - retry up to 3 times with delay
+            let profileCreated = false;
+            let newProfile = null;
+            let attempts = 0;
+            
+            while (!profileCreated && attempts < 3) {
+              attempts++;
+              
+              try {
+                // Wait a moment to ensure auth is fully processed
+                if (attempts > 1) {
+                  await new Promise(resolve => setTimeout(resolve, 1000 * attempts));
+                  logAuth(`Retrying profile creation (attempt ${attempts})`);
+                }
+                
+                // Refresh the session before trying profile creation
+                if (attempts > 1) {
+                  await refreshSession();
+                }
+                
+                const { data: createdProfile, error: createError } = await supabase
+                  .from('profiles')
+                  .insert({
+                    id: userId,
+                    username: username,
+                    email: email,
+                    credits: 3, // Default starting credits
+                    plan: 'free', // Default plan
+                    created_at: new Date().toISOString(),
+                    updated_at: new Date().toISOString()
+                  })
+                  .select()
+                  .single();
+                
+                if (createError) {
+                  console.error(`[AUTH] Error creating profile (attempt ${attempts}):`, createError);
+                } else {
+                  profileCreated = true;
+                  newProfile = createdProfile;
+                  logAuth('Successfully created new profile', newProfile);
+                }
+              } catch (createAttemptError) {
+                console.error(`[AUTH] Exception during profile creation attempt ${attempts}:`, createAttemptError);
+              }
+            }
+            
+            if (!profileCreated) {
+              logAuth('Failed to create profile after multiple attempts');
+              return null;
+            }
+            
+            return newProfile as Profile;
+          } catch (profileCreationError) {
+            console.error('[AUTH] Unexpected error during profile creation:', profileCreationError);
             return null;
           }
-          
-          logAuth('Successfully created new profile', newProfile);
-          return newProfile as Profile;
         }
         
         return null;
@@ -169,8 +204,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .split('; ')
         .some(row => row.startsWith(`${storageKey}=`));
         
-      if (!hasAuthCookie) {
-        logAuth('No auth token found in cookies');
+      // Also check localStorage as fallback  
+      const hasLocalStorage = !!localStorage.getItem(storageKey);
+      
+      if (!hasAuthCookie && !hasLocalStorage) {
+        logAuth('No auth token found in cookies or localStorage');
         return false;
       }
       
