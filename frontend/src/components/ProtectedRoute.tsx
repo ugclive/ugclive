@@ -1,256 +1,164 @@
-import { ReactNode, useEffect, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import LoadingScreen from "./ui/LoadingScreen";
 
-type ProtectedRouteProps = {
-  children: ReactNode;
-  requireAuth?: boolean;
-};
-
-// Debug constant - set to true to enable additional debugging
+// Enable for debugging
 const DEBUG_AUTH = true;
 
-const ProtectedRoute = ({ children, requireAuth = false }: ProtectedRouteProps) => {
-  const { user, isLoading, session, profile } = useAuth();
-  const navigate = useNavigate();
+const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, profile, isLoading, signOut, refreshSession, diagnoseAuth } = useAuth();
+  const location = useLocation();
+  
+  // Simplified state - only what's truly needed
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [showResetOption, setShowResetOption] = useState(false);
   const [loadingTime, setLoadingTime] = useState(0);
-  const [showDebugInfo, setShowDebugInfo] = useState(false);
-  const [storageInfo, setStorageInfo] = useState<any>(null);
-  
-  // Check and log browser storage info for debugging
-  const checkStorageInfo = () => {
-    try {
-      const storageData: any = {};
-      
-      // Check localStorage
-      const localStorageKeys = Object.keys(localStorage).filter(
-        key => key.includes('supabase') || key.includes('auth')
-      );
-      
-      storageData.localStorage = {};
-      localStorageKeys.forEach(key => {
-        try {
-          const value = localStorage.getItem(key);
-          storageData.localStorage[key] = value ? 
-            (value.length > 40 ? `${value.substring(0, 40)}...` : value) : 
-            null;
-        } catch (e) {
-          storageData.localStorage[key] = `[Error: ${e.message}]`;
-        }
-      });
-      
-      // Check sessionStorage
-      const sessionStorageKeys = Object.keys(sessionStorage).filter(
-        key => key.includes('supabase') || key.includes('auth')
-      );
-      
-      storageData.sessionStorage = {};
-      sessionStorageKeys.forEach(key => {
-        try {
-          const value = sessionStorage.getItem(key);
-          storageData.sessionStorage[key] = value ? 
-            (value.length > 40 ? `${value.substring(0, 40)}...` : value) : 
-            null;
-        } catch (e) {
-          storageData.sessionStorage[key] = `[Error: ${e.message}]`;
-        }
-      });
-      
-      // Check cookies
-      storageData.cookies = document.cookie
-        .split('; ')
-        .filter(cookie => cookie.includes('supabase') || cookie.includes('auth'))
-        .map(cookie => {
-          const [name, value] = cookie.split('=');
-          return { 
-            name, 
-            value: value.length > 40 ? `${value.substring(0, 40)}...` : value 
-          };
-        });
-      
-      setStorageInfo(storageData);
-      return storageData;
-    } catch (error) {
-      console.error("Error getting storage info:", error);
-      return { error: error.message };
-    }
-  };
-  
-  const clearAllBrowserData = () => {
+  const [recoveryAttempted, setRecoveryAttempted] = useState(false);
+
+  // Clear all browser data and sign out
+  const clearAllBrowserData = async () => {
+    if (DEBUG_AUTH) console.log("[ProtectedRoute] Clearing all browser auth data");
+    
+    // First sign out from supabase
+    await signOut();
+    
     // Clear localStorage
     localStorage.clear();
     
     // Clear sessionStorage
     sessionStorage.clear();
     
-    // Clear cookies
-    document.cookie.split(";").forEach(cookie => {
-      document.cookie = cookie
-        .replace(/^ +/, "")
-        .replace(/=.*/, `=;expires=${new Date().toUTCString()};path=/`);
+    // Clear cookies (with special focus on auth cookies)
+    document.cookie.split(";").forEach((c) => {
+      const cookieName = c.split("=")[0].trim();
+      document.cookie = `${cookieName}=;expires=${new Date().toUTCString()};path=/`;
+      // Also try with secure flag and different paths to ensure complete removal
+      document.cookie = `${cookieName}=;expires=${new Date().toUTCString()};path=/;secure`;
+      document.cookie = `${cookieName}=;expires=${new Date().toUTCString()};path=/;secure;SameSite=Lax`;
     });
     
-    // Force sign out
-    supabase.auth.signOut({ scope: 'global' })
-      .then(() => {
-        console.log("Signed out from Supabase");
-        window.location.href = "/"; // Redirect to home page
-      })
-      .catch(error => {
-        console.error("Error signing out:", error);
-        window.location.reload(); // Reload the page anyway
-      });
+    // Reload the page to ensure a clean state
+    window.location.href = "/";
   };
-  
-  // Show reset option after 3 seconds of loading (reduced from 5)
+
+  // Simpler loading timer
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    let intervalId: NodeJS.Timeout;
+    let interval: NodeJS.Timeout;
     
     if (isLoading) {
-      // Start a counter to track how long we've been loading
-      setLoadingTime(0);
-      intervalId = setInterval(() => {
-        setLoadingTime(prev => prev + 1);
-      }, 1000);
+      if (DEBUG_AUTH) console.log("[ProtectedRoute] Loading authentication...");
       
-      // After 1 second of loading, check browser storage
-      if (DEBUG_AUTH) {
-        setTimeout(() => {
-          checkStorageInfo();
-        }, 1000);
+      interval = setInterval(() => {
+        setLoadingTime((prevTime) => {
+          const newTime = prevTime + 1;
+          // Show reset option after 3 seconds of loading
+          if (newTime >= 3 && !showResetOption) {
+            setShowResetOption(true);
+          }
+          return newTime;
+        });
+      }, 1000);
+    } else {
+      if (DEBUG_AUTH && loadingTime > 0) {
+        console.log(`[ProtectedRoute] Loading completed after ${loadingTime} seconds`);
       }
       
-      timeoutId = setTimeout(() => {
-        setShowResetOption(true);
-        // Also check storage info again when showing reset option
-        if (DEBUG_AUTH) checkStorageInfo();
-      }, 3000); // 3 seconds (reduced from 5)
-    } else {
-      // Reset when not loading
-      setShowResetOption(false);
-      setLoadingTime(0);
+      // Try session recovery once if needed
+      if (!user && !recoveryAttempted && loadingTime > 0) {
+        setRecoveryAttempted(true);
+        if (DEBUG_AUTH) console.log("[ProtectedRoute] Attempting session recovery");
+        refreshSession().then(success => {
+          if (DEBUG_AUTH) console.log(`[ProtectedRoute] Recovery ${success ? 'succeeded' : 'failed'}`);
+        });
+      }
     }
     
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (intervalId) clearInterval(intervalId);
+      if (interval) clearInterval(interval);
     };
-  }, [isLoading]);
-  
-  useEffect(() => {
-    // Only redirect after auth is loaded and if requireAuth is true
-    if (!isLoading && requireAuth && !user) {
-      console.log("PROTECTED ROUTE: Redirecting unauthenticated user from protected route");
-      navigate("/", { replace: true });
-    }
-  }, [isLoading, user, requireAuth, navigate]);
+  }, [isLoading, loadingTime, user, recoveryAttempted, refreshSession]);
 
-  // Log details about the authentication state for debugging
+  // Get debug info when debugging is enabled
   useEffect(() => {
     if (DEBUG_AUTH) {
-      console.log("AUTH DEBUG STATE:", { 
-        isLoading, 
-        hasUser: !!user, 
-        hasSession: !!session,
-        hasProfile: !!profile,
-        user: user ? { id: user.id, email: user.email } : null
-      });
+      const getDebugInfo = async () => {
+        try {
+          const info = await diagnoseAuth();
+          setDebugInfo(info);
+        } catch (e) {
+          console.error("[ProtectedRoute] Error getting debug info:", e);
+        }
+      };
+      
+      getDebugInfo();
     }
-  }, [isLoading, user, session, profile]);
+  }, [diagnoseAuth, isLoading, user, location.pathname]);
 
-  // Show loading state only briefly during initial authentication check
-  if (isLoading) {
-    console.log("PROTECTED ROUTE: Still loading auth state...");
+  // If we have a user but still waiting for profile, show specific loading message
+  if (user && !profile) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
-          <p className="text-sm text-muted-foreground animate-pulse mb-4">
-            Loading authentication... {loadingTime > 0 && `(${loadingTime}s)`}
-          </p>
-          
-          {/* Debug button only shown in development */}
-          {DEBUG_AUTH && (
-            <button 
-              onClick={() => setShowDebugInfo(!showDebugInfo)} 
-              className="text-xs text-blue-500 underline mb-2"
-            >
-              {showDebugInfo ? 'Hide Debug Info' : 'Show Debug Info'}
-            </button>
-          )}
-          
-          {/* Debug information panel */}
-          {DEBUG_AUTH && showDebugInfo && storageInfo && (
-            <div className="text-xs text-left p-2 bg-black/10 rounded w-full max-w-md mb-4 overflow-auto max-h-40">
-              <p className="font-bold">Auth Debug Info:</p>
-              <p>Loading: {isLoading ? 'Yes' : 'No'}, Has User: {user ? 'Yes' : 'No'}, Has Session: {session ? 'Yes' : 'No'}</p>
-              
-              <p className="font-bold mt-2">LocalStorage:</p>
-              <pre className="text-xs overflow-x-auto">
-                {Object.keys(storageInfo.localStorage).length > 0 ? 
-                  JSON.stringify(storageInfo.localStorage, null, 2) : 
-                  'No auth items found'}
-              </pre>
-              
-              <p className="font-bold mt-2">SessionStorage:</p>
-              <pre className="text-xs overflow-x-auto">
-                {Object.keys(storageInfo.sessionStorage).length > 0 ? 
-                  JSON.stringify(storageInfo.sessionStorage, null, 2) : 
-                  'No auth items found'}
-              </pre>
-              
-              <p className="font-bold mt-2">Cookies:</p>
-              <pre className="text-xs overflow-x-auto">
-                {storageInfo.cookies && storageInfo.cookies.length > 0 ? 
-                  JSON.stringify(storageInfo.cookies, null, 2) : 
-                  'No auth cookies found'}
-              </pre>
-              
-              <button 
-                onClick={clearAllBrowserData}
-                className="mt-4 bg-red-600 text-white px-2 py-1 rounded text-xs w-full"
-              >
-                Clear ALL Browser Data & Sign Out
-              </button>
-            </div>
-          )}
-          
-          {/* Show reset option after delay */}
-          {showResetOption && (
-            <div className="mt-4 text-center">
-              <p className="text-sm text-red-500 mb-2">Authentication taking too long</p>
-              <div className="space-y-3">
-                <div className="text-xs text-muted-foreground px-4 py-2 bg-muted/20 rounded">
-                  <p>This could be happening due to:</p>
-                  <ul className="list-disc pl-5 mt-1">
-                    <li>Network connectivity issues</li>
-                    <li>Browser storage problems</li>
-                    <li>Session authentication error</li>
-                  </ul>
-                </div>
-                <Link to="/reset-auth">
-                  <Button variant="destructive" size="sm" className="w-full">
-                    Reset Authentication
-                  </Button>
-                </Link>
-                <div>
-                  <Button variant="outline" size="sm" className="w-full" onClick={() => window.location.reload()}>
-                    Try Refreshing First
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+        <LoadingScreen message="Loading profile..." />
       </div>
     );
   }
 
-  console.log("PROTECTED ROUTE: Rendering content, user:", user ? "authenticated" : "unauthenticated");
+  // Show loading screen during initial loading
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background p-4">
+        <LoadingScreen message="Authenticating..." />
+        
+        {/* Show reset option if it's taking too long */}
+        {showResetOption && (
+          <div className="mt-8 text-center">
+            <p className="text-muted-foreground mb-2">
+              Taking too long? There might be an issue with your session.
+            </p>
+            <button
+              onClick={clearAllBrowserData}
+              className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90"
+            >
+              Reset Authentication
+            </button>
+          </div>
+        )}
+        
+        {/* Debug information section */}
+        {DEBUG_AUTH && debugInfo && (
+          <div className="mt-8 p-4 border border-gray-200 rounded-md max-w-lg w-full bg-muted/50 text-xs">
+            <h3 className="font-medium mb-2">Auth Debug Info:</h3>
+            <pre className="overflow-auto max-h-48 p-2 bg-muted rounded">
+              {JSON.stringify(
+                {
+                  loadingTime: `${loadingTime}s`,
+                  isLoading,
+                  recoveryAttempted,
+                  location: location.pathname,
+                  hasToken: debugInfo.hasToken,
+                  sessionState: debugInfo?.session,
+                  userExists: debugInfo?.user?.exists,
+                  profileExists: !!profile,
+                  contextState: debugInfo?.contextState
+                },
+                null,
+                2
+              )}
+            </pre>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // If not loading but no user, redirect to signin
+  if (!user) {
+    if (DEBUG_AUTH) console.log("[ProtectedRoute] No user, redirecting to signin");
+    return <Navigate to="/" state={{ from: location }} replace />;
+  }
+
+  // User is authenticated and has a profile
   return <>{children}</>;
 };
 

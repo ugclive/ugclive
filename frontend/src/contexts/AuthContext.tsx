@@ -33,7 +33,7 @@ type AuthContextType = AuthState & {
 };
 
 // Enable debugging
-const DEBUG_AUTH = true;
+const DEBUG_AUTH = false;
 
 // Create AuthContext
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -150,23 +150,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       logAuth('Validating auth state');
       
-      // Check if we have a token in localStorage
-      const token = localStorage.getItem('sb-yoqsadxajmnqhhkajiyk-auth-token');
-      if (!token) {
-        logAuth('No auth token found in localStorage');
-        return false;
-      }
-      
-      // Try to parse the token to check it's not corrupted
-      try {
-        const parsedToken = JSON.parse(token);
-        if (!parsedToken) {
-          logAuth('Auth token is not valid JSON');
-          return false;
-        }
-      } catch (e) {
-        logAuth('Auth token is corrupted, clearing');
-        localStorage.removeItem('sb-yoqsadxajmnqhhkajiyk-auth-token');
+      // Check if we have a token in cookies
+      const hasAuthCookie = document.cookie
+        .split('; ')
+        .some(row => row.startsWith('sb-auth-token='));
+        
+      if (!hasAuthCookie) {
+        logAuth('No auth token found in cookies');
         return false;
       }
       
@@ -397,9 +387,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         
         // Clear storage items
         logAuth('Clearing auth storage items');
+        
+        // Clear localStorage items
         Object.keys(localStorage).forEach(key => {
           if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
             localStorage.removeItem(key);
+          }
+        });
+        
+        // Clear cookies
+        document.cookie.split(';').forEach(cookie => {
+          const name = cookie.split('=')[0].trim();
+          if (name.includes('sb-') || name.includes('supabase') || name.includes('auth')) {
+            document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure; SameSite=Lax`;
           }
         });
       }

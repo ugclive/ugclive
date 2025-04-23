@@ -30,8 +30,8 @@ const queryClient = new QueryClient({
 
 // Improved authentication with persistent sessions - April 2023 update
 
-// Wrapper component to conditionally show the MobileWarningModal
-const AppContent = () => {
+// Create a separate component for the router-dependent content
+const AppContentWithRouter = () => {
   const location = useLocation();
   const isSelfHostPage = location.pathname === "/self-host";
   
@@ -54,10 +54,11 @@ const AppContent = () => {
         <Route path="/" element={<Landing />} />
         <Route path="/self-host" element={<SelfHost />} />
         <Route path="/reset-auth" element={<ResetAuthPage />} />
+        <Route path="/signin" element={<Navigate to="/" replace />} />
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute requireAuth={true}>
+            <ProtectedRoute>
               <Dashboard />
             </ProtectedRoute>
           }
@@ -65,7 +66,7 @@ const AppContent = () => {
         <Route
           path="/admin"
           element={
-            <ProtectedRoute requireAuth={true}>
+            <ProtectedRoute>
               <AdminDashboard />
             </ProtectedRoute>
           }
@@ -87,7 +88,7 @@ const App = () => {
       <BrowserRouter>
         <AuthProvider>
           <TooltipProvider>
-            <AppContent />
+            <AppContentWithRouter />
           </TooltipProvider>
         </AuthProvider>
       </BrowserRouter>
