@@ -13,8 +13,9 @@ import SelfHost from "./pages/SelfHost";
 import SelfHostBanner from "./components/SelfHostBanner";
 import { MobileWarningModal } from "./components/MobileWarningModal";
 import ResetAuthPage from "./pages/ResetAuthPage";
+import AuthCallback from "./pages/AuthCallback";
 import { useEffect } from 'react';
-import { diagnoseAuthState } from '@/integrations/supabase/client';
+import { diagnoseAuthState } from '@/lib/supabase';
 
 // Create a client with optimized settings
 const queryClient = new QueryClient({
@@ -55,6 +56,7 @@ const AppContentWithRouter = () => {
         <Route path="/self-host" element={<SelfHost />} />
         <Route path="/reset-auth" element={<ResetAuthPage />} />
         <Route path="/signin" element={<Navigate to="/" replace />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
         <Route
           path="/dashboard"
           element={
