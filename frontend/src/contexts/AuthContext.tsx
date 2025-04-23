@@ -35,6 +35,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Storage key for cached profile
 const PROFILE_STORAGE_KEY = 'ugclive-user-profile';
+// Profile fetch timeout in milliseconds
+const PROFILE_FETCH_TIMEOUT = 3000;
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -46,6 +48,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // Helper function to determine admin status
+  const determineAdminStatus = (email: string | null | undefined): boolean => {
+    return typeof email === 'string' && 
+      (email.endsWith('@ugclive.com') || 
+       email.endsWith('@ugcl.dev') ||
+       email.endsWith('@liveavatar.ai'));
+  };
+  
   // Function to clean up corrupted auth state
   const cleanupAuthState = () => {
     try {
@@ -100,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   };
   
-  // Function to fetch user profile from Supabase
+  // Function to fetch user profile from Supabase with timeout
   const fetchProfile = async (userId: string) => {
     if (!userId) {
       console.error('[AuthContext] Attempted to fetch profile without userId');
@@ -116,35 +126,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cachedProfile) {
         console.log('[AuthContext] Using cached profile while fetching fresh data');
         setProfile(cachedProfile);
+        setIsAdmin(determineAdminStatus(cachedProfile.email || user?.email));
       }
       
-      // Fetch fresh profile from Supabase
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      // Create a timeout promise
+      const timeoutPromise = new Promise<null>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Profile fetch timeout'));
+        }, PROFILE_FETCH_TIMEOUT);
+      });
       
-      if (error) {
-        console.error('[AuthContext] Error fetching profile:', error);
+      // Create the fetch profile promise
+      const fetchProfilePromise = new Promise<Profile | null>(async (resolve) => {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
+          
+          if (error) {
+            console.error('[AuthContext] Error fetching profile:', error);
+            resolve(null);
+            return;
+          }
+          
+          console.log('[AuthContext] Profile fetched successfully');
+          resolve(data as Profile);
+        } catch (error) {
+          console.error('[AuthContext] Unexpected error fetching profile:', error);
+          resolve(null);
+        }
+      });
+      
+      // Race between timeout and fetch
+      try {
+        const profileData = await Promise.race([fetchProfilePromise, timeoutPromise]) as Profile | null;
+        
+        if (profileData) {
+          // Handle successful fetch
+          const isAdmin = determineAdminStatus(profileData.email || user?.email);
+          
+          setProfile(profileData);
+          setIsAdmin(isAdmin);
+          cacheProfile(profileData);
+          return profileData;
+        } else if (cachedProfile) {
+          // If fetch failed but we have a cached profile, keep using it
+          console.log('[AuthContext] Using cached profile due to fetch failure');
+          return cachedProfile;
+        }
+        return null;
+      } catch (error) {
+        // Timeout occurred
+        console.warn('[AuthContext] Profile fetch timed out after 3 seconds');
+        
+        if (cachedProfile) {
+          console.log('[AuthContext] Using cached profile due to timeout');
+          return cachedProfile;
+        }
+        
         return null;
       }
-      
-      console.log('[AuthContext] Profile fetched successfully');
-      
-      // Set admin status based on email ending with @ugclive.com
-      const userEmail = data.email || user?.email;
-      const isAdmin = typeof userEmail === 'string' && 
-                     (userEmail.endsWith('@ugclive.com') || 
-                      userEmail.endsWith('@ugcl.dev') ||
-                      userEmail.endsWith('@liveavatar.ai'));
-      
-      setProfile(data as Profile);
-      setIsAdmin(isAdmin);
-      cacheProfile(data as Profile);
-      return data as Profile;
     } catch (error) {
-      console.error('[AuthContext] Unexpected error fetching profile:', error);
+      console.error('[AuthContext] Error in profile fetch process:', error);
       return null;
     } finally {
       setIsLoadingProfile(false);
@@ -287,7 +332,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  // Initialize auth state and set up listeners
+  // Initialize auth state
   useEffect(() => {
     // Don't run this effect more than once
     if (isInitialized) return;
@@ -337,7 +382,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
     
     initialize();
-  }, [isInitialized]);
+  }, []);
   
   // Set up auth state change listener
   useEffect(() => {
