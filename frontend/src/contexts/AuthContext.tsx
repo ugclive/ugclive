@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from "react";
 import { supabase, STORAGE_KEY, diagnoseAuthState } from "@/lib/supabase";
 import { Session, User, AuthError } from "@supabase/supabase-js";
 import { toast } from "@/components/ui/use-toast";
@@ -45,9 +45,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [error, setError] = useState<AuthError | Error | null>(null);
-  const [isInitialized, setIsInitialized] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-
+  
+  // Use ref to cache session for faster access and avoid redundant fetches
+  const sessionCache = useRef<Session | null>(null);
+  // Track auth state initialization
+  const authStateInitialized = useRef<boolean>(false);
+  
   // Helper function to determine admin status
   const determineAdminStatus = (email: string | null | undefined): boolean => {
     return typeof email === 'string' && 
@@ -212,6 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[AuthContext] Session refreshed successfully');
         setSession(data.session);
         setUser(data.session.user);
+        sessionCache.current = data.session;
         setSessionToken(data.session.access_token);
         return true;
       }
@@ -244,6 +249,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.log('[AuthContext] Recovery succeeded');
           setSession(data.session);
           setUser(data.session.user);
+          sessionCache.current = data.session;
           setSessionToken(data.session.access_token);
           return true;
         }
@@ -255,6 +261,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(null);
       setUser(null);
       setProfile(null);
+      sessionCache.current = null;
       setSessionToken(null);
       cleanupAuthState();
       return false;
@@ -272,6 +279,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Clear local state first
       setSessionToken(null);
+      sessionCache.current = null;
       
       // Then sign out from Supabase
       const { error } = await supabase.auth.signOut();
@@ -332,20 +340,87 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  // Initialize auth state
-  useEffect(() => {
-    // Don't run this effect more than once
-    if (isInitialized) return;
+  // Helper for updating auth state
+  const updateAuthState = (newSession: Session | null) => {
+    if (!newSession) {
+      setSession(null);
+      setUser(null);
+      sessionCache.current = null;
+      setSessionToken(null);
+      return;
+    }
     
-    const initialize = async () => {
+    setSession(newSession);
+    setUser(newSession.user);
+    sessionCache.current = newSession;
+    setSessionToken(newSession.access_token);
+    
+    // Log expiry time
+    if (newSession.expires_at) {
+      const expiresAt = new Date(newSession.expires_at * 1000);
+      console.log(`[AuthContext] Session expires at ${expiresAt.toLocaleString()}`);
+    }
+  };
+  
+  // Initialize auth state and set up auth state listener
+  useEffect(() => {
+    if (authStateInitialized.current) return;
+    authStateInitialized.current = true;
+    
+    console.log('[AuthContext] Starting auth initialization');
+    setIsLoading(true);
+    
+    // Track whether a valid session was found through any method
+    let sessionFound = false;
+    
+    // Check for and clean up corrupted auth state
+    cleanupAuthState();
+    
+    // Set up auth state change listener first
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, newSession) => {
+        console.log(`[AuthContext] Auth state changed: ${event}`);
+        
+        if (newSession) {
+          updateAuthState(newSession);
+          sessionFound = true;
+          
+          // Fetch profile if needed and we have a user ID
+          if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+            await fetchProfile(newSession.user.id);
+          }
+        } else if (event === 'SIGNED_OUT') {
+          console.log('[AuthContext] User signed out');
+          updateAuthState(null);
+          setProfile(null);
+          cacheProfile(null);
+        }
+        
+        // Set loading to false after processing auth change
+        if (isLoading) {
+          setIsLoading(false);
+        }
+      }
+    );
+    
+    // Attempt to get the session in parallel
+    const getInitialSession = async () => {
       try {
-        console.log('[AuthContext] Initializing auth');
-        setIsLoading(true);
+        // Check if we have a cached session first
+        if (sessionCache.current) {
+          console.log('[AuthContext] Using cached session');
+          updateAuthState(sessionCache.current);
+          sessionFound = true;
+          
+          if (sessionCache.current.user) {
+            await fetchProfile(sessionCache.current.user.id);
+          }
+          
+          setIsLoading(false);
+          return;
+        }
         
-        // Check for corrupted auth state first
-        cleanupAuthState();
-        
-        // Get initial session
+        // Otherwise, fetch session from Supabase
         const { data, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -356,91 +431,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         if (data.session) {
-          console.log('[AuthContext] Found initial session');
-          setSession(data.session);
-          setUser(data.session.user);
-          setSessionToken(data.session.access_token);
+          console.log('[AuthContext] Found initial session via getSession');
+          updateAuthState(data.session);
+          sessionFound = true;
           
-          // Get user profile
-          await fetchProfile(data.session.user.id);
-          
-          // Log expiry time
-          if (data.session.expires_at) {
-            const expiresAt = new Date(data.session.expires_at * 1000);
-            console.log(`[AuthContext] Session expires at ${expiresAt.toLocaleString()}`);
+          // Fetch profile
+          if (data.session.user) {
+            await fetchProfile(data.session.user.id);
           }
         } else {
-          console.log('[AuthContext] No initial session found');
+          console.log('[AuthContext] No initial session found via getSession');
+        }
+        
+        // Set loading to false after getSession completes if no session was found by auth state change
+        if (isLoading) {
+          setIsLoading(false);
         }
       } catch (error) {
         console.error('[AuthContext] Error during initialization:', error);
         setError(error as Error);
-      } finally {
         setIsLoading(false);
-        setIsInitialized(true);
       }
     };
     
-    initialize();
-  }, []);
-  
-  // Set up auth state change listener
-  useEffect(() => {
-    // Only set up listener once initialization is complete
-    if (!isInitialized) return;
-    
-    console.log('[AuthContext] Setting up auth state listener');
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log(`[AuthContext] Auth state changed: ${event}`);
-        
-        // Update session and user state
-        setSession(session);
-        setUser(session?.user ?? null);
-        
-        // Update API token
-        setSessionToken(session?.access_token ?? null);
-        
-        // Handle specific events
-        switch (event) {
-          case 'SIGNED_IN':
-            console.log('[AuthContext] User signed in');
-            if (session?.user) {
-              await fetchProfile(session.user.id);
-            }
-            break;
-            
-          case 'SIGNED_OUT':
-            console.log('[AuthContext] User signed out');
-            setProfile(null);
-            cacheProfile(null);
-            break;
-            
-          case 'TOKEN_REFRESHED':
-            console.log('[AuthContext] Token refreshed');
-            break;
-            
-          case 'USER_UPDATED':
-            console.log('[AuthContext] User updated');
-            if (session?.user) {
-              await fetchProfile(session.user.id);
-            }
-            break;
-        }
-      }
-    );
+    // Start fetching session immediately
+    getInitialSession();
     
     // Clean up subscription on unmount
     return () => {
       console.log('[AuthContext] Cleaning up auth state listener');
       subscription.unsubscribe();
     };
-  }, [isInitialized]);
+  }, []);
   
   // Refresh session periodically to prevent expiration
   useEffect(() => {
-    if (!session || !isInitialized) return;
+    if (!session) return;
     
     // Refresh token if it expires in less than 10 minutes
     const checkTokenExpiration = async () => {
@@ -464,7 +490,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const interval = setInterval(checkTokenExpiration, 5 * 60 * 1000);
     
     return () => clearInterval(interval);
-  }, [session, isInitialized]);
+  }, [session]);
   
   // Set up network status listener to refresh session when coming back online
   useEffect(() => {
