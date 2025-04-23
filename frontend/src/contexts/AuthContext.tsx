@@ -28,6 +28,7 @@ type AuthContextType = {
   refreshSession: () => Promise<boolean>;
   recoverSession: () => Promise<boolean>;
   isAdmin: boolean;
+  hasHydrated: boolean;
 };
 
 // Create AuthContext
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [error, setError] = useState<AuthError | Error | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasHydrated, setHasHydrated] = useState(false);
   
   // Use ref to cache session for faster access and avoid redundant fetches
   const sessionCache = useRef<Session | null>(null);
@@ -603,6 +605,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [session]);
   
+  // Use effect to track when auth state has fully hydrated
+  useEffect(() => {
+    // Set hasHydrated to true when auth state is resolved
+    // Either we have a profile (logged in) or we're not loading and have no session (logged out)
+    if (!isLoading && (profile || !session)) {
+      if (!hasHydrated) {
+        console.log('[AuthContext] Auth state fully hydrated');
+        setHasHydrated(true);
+      }
+    }
+  }, [isLoading, profile, session, hasHydrated]);
+  
   // Context value with all auth state and functions
   const value = {
     session,
@@ -615,7 +629,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithOAuth,
     refreshSession,
     recoverSession,
-    isAdmin
+    isAdmin,
+    hasHydrated
   };
   
   // Provide auth context to children
