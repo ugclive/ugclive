@@ -1,9 +1,8 @@
-
 import { useState, ChangeEvent } from "react";
 import { Loader2, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -17,6 +16,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createTemplate } from "@/services/templateService";
+
+// Type definitions for Supabase responses
+interface SignedUrlResponse {
+  signedUrl: string;
+  token?: string;
+  path?: string;
+}
+
+interface PublicUrlResponse {
+  publicUrl: string;
+}
 
 interface VideoUploadDialogProps {
   isOpen: boolean;
@@ -78,12 +88,18 @@ const VideoUploadDialog = ({ isOpen, onClose, onSuccess }: VideoUploadDialogProp
       const filePath = `${user.id}/${fileName}`;
       
       // Upload video to Supabase storage using XMLHttpRequest to track progress
-      const { data: signedUrlData } = await supabase.storage
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
         .from('user-templates')
         .createSignedUploadUrl(filePath);
         
-      if (!signedUrlData) {
-        throw new Error('Failed to get upload URL');
+      if (signedUrlError || !signedUrlData) {
+        throw new Error(signedUrlError?.message || 'Failed to get upload URL');
+      }
+      
+      // Type assert and verify the signed URL
+      const signedUrl = signedUrlData.signedUrl;
+      if (!signedUrl) {
+        throw new Error('Missing signed URL in response');
       }
       
       // Create a FormData object
@@ -117,16 +133,26 @@ const VideoUploadDialog = ({ isOpen, onClose, onSuccess }: VideoUploadDialogProp
       });
       
       // Start the upload
-      xhr.open('PUT', signedUrlData.signedUrl);
+      xhr.open('PUT', signedUrl);
       xhr.send(videoFile);
       
       // Wait for the upload to complete
       await uploadPromise;
       
       // Get the public URL for the video
-      const { data: videoUrl } = supabase.storage
+      const { data: videoUrlData } = supabase.storage
         .from('user-templates')
         .getPublicUrl(filePath);
+      
+      if (!videoUrlData) {
+        throw new Error('Failed to get video public URL');
+      }
+      
+      // Type assert and verify the public URL
+      const videoPublicUrl = videoUrlData.publicUrl;
+      if (!videoPublicUrl) {
+        throw new Error('Missing video public URL in response');
+      }
       
       // Create a thumbnail from the video
       const thumbnailFilePath = `${user.id}/thumbnail_${fileName.replace('.mp4', '.jpg')}`;
@@ -165,12 +191,18 @@ const VideoUploadDialog = ({ isOpen, onClose, onSuccess }: VideoUploadDialogProp
       });
       
       // Upload thumbnail to Supabase storage using the same XMLHttpRequest approach
-      const { data: thumbnailSignedUrlData } = await supabase.storage
+      const { data: thumbnailSignedUrlData, error: thumbnailSignedUrlError } = await supabase.storage
         .from('user-templates')
         .createSignedUploadUrl(thumbnailFilePath);
         
-      if (!thumbnailSignedUrlData) {
-        throw new Error('Failed to get thumbnail upload URL');
+      if (thumbnailSignedUrlError || !thumbnailSignedUrlData) {
+        throw new Error(thumbnailSignedUrlError?.message || 'Failed to get thumbnail upload URL');
+      }
+      
+      // Type assert and verify the thumbnail signed URL
+      const thumbnailSignedUrl = thumbnailSignedUrlData.signedUrl;
+      if (!thumbnailSignedUrl) {
+        throw new Error('Missing thumbnail signed URL in response');
       }
       
       // Use XMLHttpRequest to track thumbnail upload progress
@@ -200,7 +232,7 @@ const VideoUploadDialog = ({ isOpen, onClose, onSuccess }: VideoUploadDialogProp
       });
       
       // Start the thumbnail upload
-      thumbnailXhr.open('PUT', thumbnailSignedUrlData.signedUrl);
+      thumbnailXhr.open('PUT', thumbnailSignedUrl);
       thumbnailXhr.setRequestHeader('Content-Type', 'image/jpeg');
       thumbnailXhr.send(thumbnailBlob);
       
@@ -208,15 +240,25 @@ const VideoUploadDialog = ({ isOpen, onClose, onSuccess }: VideoUploadDialogProp
       await thumbnailUploadPromise;
       
       // Get the public URL for the thumbnail
-      const { data: thumbnailUrl } = supabase.storage
+      const { data: thumbnailUrlData } = supabase.storage
         .from('user-templates')
         .getPublicUrl(thumbnailFilePath);
+      
+      if (!thumbnailUrlData) {
+        throw new Error('Failed to get thumbnail public URL');
+      }
+      
+      // Type assert and verify the thumbnail public URL
+      const thumbnailPublicUrl = thumbnailUrlData.publicUrl;
+      if (!thumbnailPublicUrl) {
+        throw new Error('Missing thumbnail public URL in response');
+      }
       
       // Save template information to the database
       await createTemplate(
         user.id,
-        thumbnailUrl.publicUrl,
-        videoUrl.publicUrl
+        thumbnailPublicUrl,
+        videoPublicUrl
       );
       
       toast.success('Video uploaded successfully');
