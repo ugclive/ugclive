@@ -1,57 +1,109 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import LoadingScreen from '@/components/ui/LoadingScreen'
+import { toast } from '@/components/ui/use-toast'
 
 export default function AuthCallback() {
   const navigate = useNavigate()
-
+  const [error, setError] = useState<string | null>(null)
+  
   useEffect(() => {
-    // Try to get the code from URL
+    // Helper to parse hash parameters from the URL
     const parseHashParams = (hash: string) => {
-      const params = new URLSearchParams(hash.replace('#', ''))
+      if (!hash || hash.length === 0) return {}
+      const hashWithoutPrefix = hash.startsWith('#') ? hash.substring(1) : hash
+      const params = new URLSearchParams(hashWithoutPrefix)
       return Object.fromEntries(params.entries())
     }
-
-    // Exchange auth code for session
+    
     const handleAuthCallback = async () => {
       try {
-        // First check for error in the URL
+        console.log('[AuthCallback] Processing authentication callback')
+        
+        // Check for error in the URL first
         const hashParams = parseHashParams(window.location.hash)
         if (hashParams.error) {
-          console.error('Auth error:', hashParams.error_description || hashParams.error)
-          navigate('/')
+          const errorDescription = hashParams.error_description || hashParams.error
+          console.error('[AuthCallback] Error in URL:', errorDescription)
+          setError(errorDescription)
+          
+          setTimeout(() => {
+            navigate('/')
+          }, 3000)
           return
         }
-
-        // Get session from URL
+        
+        // If code and type parameters exist, we're handling an OAuth callback
+        if (hashParams.code && hashParams.type) {
+          console.log('[AuthCallback] Processing OAuth callback')
+        }
+        
+        // Get the session (supabase will handle the token exchange)
         const { data, error } = await supabase.auth.getSession()
         
         if (error) {
-          console.error('Error getting session:', error.message)
-          navigate('/')
+          console.error('[AuthCallback] Error getting session:', error.message)
+          setError(error.message)
+          
+          setTimeout(() => {
+            navigate('/')
+          }, 3000)
           return
         }
-
-        // Success, redirect to dashboard
+        
         if (data?.session) {
-          console.log('Successfully authenticated')
+          // Success! We have a session
+          console.log('[AuthCallback] Authentication successful')
+          
+          toast({
+            title: 'Successfully signed in',
+            description: 'Redirecting you to the dashboard...',
+          })
+          
+          // Redirect to dashboard
           navigate('/dashboard')
         } else {
-          // No session found in URL
-          console.log('No session found in URL, redirecting home')
-          navigate('/')
+          // No session found
+          console.warn('[AuthCallback] No session found in callback response')
+          setError('Authentication failed. No session created.')
+          
+          setTimeout(() => {
+            navigate('/')
+          }, 3000)
         }
-      } catch (error) {
-        console.error('Unexpected error during auth callback:', error)
-        navigate('/')
+      } catch (err: any) {
+        console.error('[AuthCallback] Unexpected error during auth callback:', err)
+        setError(`Unexpected error: ${err.message || 'Unknown error'}`)
+        
+        setTimeout(() => {
+          navigate('/')
+        }, 3000)
       }
     }
-
+    
     // Run the callback handler
     handleAuthCallback()
   }, [navigate])
-
-  // Show loading screen while handling the callback
-  return <LoadingScreen message="Finalizing authentication..." />
+  
+  // Show error state if there was a problem
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4">
+        <div className="bg-destructive/10 text-destructive p-4 rounded-md max-w-md text-center">
+          <h2 className="text-lg font-semibold mb-2">Authentication Error</h2>
+          <p>{error}</p>
+          <p className="text-sm mt-2">Redirecting to home page...</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // Default loading state
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <LoadingScreen message="Completing authentication..." />
+      <p className="mt-4 text-muted-foreground">Please wait while we set up your account...</p>
+    </div>
+  )
 } 
