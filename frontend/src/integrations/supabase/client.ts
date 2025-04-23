@@ -22,7 +22,7 @@ const STORAGE_KEY = `sb-${PROJECT_REF}-auth-token`;
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-// Create the Supabase client with cookie-based persistence configuration
+// Create the Supabase client with standard localStorage storage
 export const supabase = createClient<Database>(
   SUPABASE_URL, 
   SUPABASE_ANON_KEY,
@@ -32,65 +32,11 @@ export const supabase = createClient<Database>(
       autoRefreshToken: true,
       detectSessionInUrl: false,
       storageKey: STORAGE_KEY,
-      storage: {
-        getItem: (key) => {
-          try {
-            const cookieValue = document.cookie
-              .split('; ')
-              .find((row) => row.startsWith(`${key}=`))
-              ?.split('=')[1];
-              
-            if (DEBUG_AUTH) {
-              console.log(`[AUTH] Reading cookie: ${key}`, cookieValue ? 'Found' : 'Not found');
-            }
-            
-            return cookieValue ? decodeURIComponent(cookieValue) : null;
-          } catch (e) {
-            console.error('[AUTH] Error getting cookie:', e);
-            // As a fallback, try localStorage
-            const fallbackValue = localStorage.getItem(key);
-            if (fallbackValue && DEBUG_AUTH) {
-              console.log(`[AUTH] Fallback to localStorage for ${key}`);
-            }
-            return fallbackValue;
-          }
-        },
-        setItem: (key, value) => {
-          try {
-            // First, store in localStorage as fallback
-            localStorage.setItem(key, value);
-            
-            const encodedValue = encodeURIComponent(value);
-            // Set cookie with proper SameSite and expiration
-            document.cookie = `${key}=${encodedValue}; path=/; secure; SameSite=Lax; max-age=${60 * 60 * 24 * 7}`;
-            
-            if (DEBUG_AUTH) {
-              console.log(`[AUTH] Cookie set: ${key} (expires in 7 days)`);
-            }
-          } catch (e) {
-            console.error('[AUTH] Error setting cookie:', e);
-          }
-        },
-        removeItem: (key) => {
-          try {
-            // Remove from both storage mechanisms
-            localStorage.removeItem(key);
-            document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure; SameSite=Lax`;
-            
-            if (DEBUG_AUTH) {
-              console.log(`[AUTH] Cookie removed: ${key}`);
-            }
-          } catch (e) {
-            console.error('[AUTH] Error removing cookie:', e);
-          }
-        },
-      },
       debug: DEBUG_AUTH
     },
     global: {
       headers: {
-        'X-Client-Info': 'ugclive-frontend',
-        'Content-Type': 'application/json'
+        'X-Client-Info': 'ugclive-frontend'
       }
     }
   }
@@ -101,15 +47,9 @@ export const diagnoseAuthState = async () => {
   try {
     console.log('[AUTH] Running auth diagnostic...');
     
-    // Check for auth token in cookies
-    const hasCookie = document.cookie
-      .split('; ')
-      .some(row => row.startsWith(`${STORAGE_KEY}=`));
-    console.log('[AUTH] Token exists in cookies:', hasCookie);
-    
-    // Check for localStorage fallback
-    const hasLocalStorage = !!localStorage.getItem(STORAGE_KEY);
-    console.log('[AUTH] Token exists in localStorage:', hasLocalStorage);
+    // Check for auth token in localStorage
+    const localStorageToken = localStorage.getItem(STORAGE_KEY);
+    console.log('[AUTH] Token exists in localStorage:', !!localStorageToken);
     
     // Try to get current session
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
@@ -125,26 +65,17 @@ export const diagnoseAuthState = async () => {
       console.error('[AUTH] User error:', userError);
     }
     
-    // Log all auth-related storage
-    console.log('[AUTH] Auth storage:');
-    
-    // Check cookies
-    document.cookie.split('; ').forEach(cookie => {
-      const [name, value] = cookie.split('=');
-      if (name.includes('supabase') || name.includes('sb-') || name.includes('auth')) {
-        console.log(`  Cookie: ${name}: ${value ? `${value.substring(0, 20)}...` : 'empty'}`);
-      }
-    });
-    
-    // Check localStorage
+    // Log all auth-related storage items
+    console.log('[AUTH] Auth storage items:');
     Object.keys(localStorage).forEach(key => {
       if (key.includes('supabase') || key.includes('sb-') || key.includes('auth')) {
-        console.log(`  LocalStorage: ${key}: ${localStorage.getItem(key)?.substring(0, 20)}...`);
+        const value = localStorage.getItem(key);
+        console.log(`  ${key}: ${value ? `${value.substring(0, 20)}...` : 'empty'}`);
       }
     });
     
     return {
-      hasToken: hasCookie || hasLocalStorage,
+      hasToken: !!localStorageToken,
       hasSession: !!sessionData?.session,
       hasUser: !!userData?.user,
       sessionError,
