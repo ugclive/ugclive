@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { supabase, diagnoseAuthState } from "@/integrations/supabase/client";
 import type { Session, User, AuthError } from "@supabase/supabase-js";
 import { toast } from "sonner";
+import { SUPABASE_URL } from "@/config";
 
 // Types
 export type Profile = {
@@ -150,10 +151,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       logAuth('Validating auth state');
       
+      // Get project ref from Supabase URL using the config import
+      const getProjectRef = () => {
+        try {
+          const url = new URL(SUPABASE_URL);
+          return url.hostname.split('.')[0];
+        } catch {
+          return 'unknown';
+        }
+      };
+      
+      const projectRef = getProjectRef();
+      const storageKey = `sb-${projectRef}-auth-token`;
+      
       // Check if we have a token in cookies
       const hasAuthCookie = document.cookie
         .split('; ')
-        .some(row => row.startsWith('sb-auth-token='));
+        .some(row => row.startsWith(`${storageKey}=`));
         
       if (!hasAuthCookie) {
         logAuth('No auth token found in cookies');
@@ -374,6 +388,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       logAuth('Signing out user');
       
+      // Get the project ref for the storage key
+      const getProjectRef = () => {
+        try {
+          const url = new URL(SUPABASE_URL);
+          return url.hostname.split('.')[0];
+        } catch {
+          return 'unknown';
+        }
+      };
+      
+      const projectRef = getProjectRef();
+      
       // Thorough sign out
       const { error } = await supabase.auth.signOut({ scope: 'global' });
       
@@ -402,6 +428,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             document.cookie = `${name}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure; SameSite=Lax`;
           }
         });
+        
+        // Specifically clear the project-specific auth token
+        document.cookie = `sb-${projectRef}-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure; SameSite=Lax`;
       }
     } catch (error) {
       console.error("Unexpected error during sign out:", error);

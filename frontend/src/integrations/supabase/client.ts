@@ -6,6 +6,19 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/config';
 // Enable verbose auth logging
 const DEBUG_AUTH = true;
 
+// Extract project reference from the URL
+const getProjectRef = () => {
+  try {
+    const url = new URL(SUPABASE_URL);
+    return url.hostname.split('.')[0];
+  } catch {
+    return 'unknown';
+  }
+};
+
+const PROJECT_REF = getProjectRef();
+const STORAGE_KEY = `sb-${PROJECT_REF}-auth-token`;
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
@@ -17,19 +30,47 @@ export const supabase = createClient<Database>(
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      storageKey: 'sb-auth-token',
+      storageKey: STORAGE_KEY,
       storage: {
         getItem: (key) => {
-          return document.cookie
-            .split('; ')
-            .find((row) => row.startsWith(`${key}=`))
-            ?.split('=')[1];
+          try {
+            const cookieValue = document.cookie
+              .split('; ')
+              .find((row) => row.startsWith(`${key}=`))
+              ?.split('=')[1];
+              
+            if (DEBUG_AUTH) {
+              console.log(`[AUTH] Reading cookie: ${key}`, cookieValue ? 'Found' : 'Not found');
+            }
+            
+            return cookieValue ? decodeURIComponent(cookieValue) : null;
+          } catch (e) {
+            console.error('[AUTH] Error getting cookie:', e);
+            return null;
+          }
         },
         setItem: (key, value) => {
-          document.cookie = `${key}=${value}; path=/; secure; SameSite=Lax; max-age=${60 * 60 * 24 * 7}`;
+          try {
+            const encodedValue = encodeURIComponent(value);
+            document.cookie = `${key}=${encodedValue}; path=/; secure; SameSite=Lax; max-age=${60 * 60 * 24 * 7}`;
+            
+            if (DEBUG_AUTH) {
+              console.log(`[AUTH] Cookie set: ${key} (expires in 7 days)`);
+            }
+          } catch (e) {
+            console.error('[AUTH] Error setting cookie:', e);
+          }
         },
         removeItem: (key) => {
-          document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+          try {
+            document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure; SameSite=Lax`;
+            
+            if (DEBUG_AUTH) {
+              console.log(`[AUTH] Cookie removed: ${key}`);
+            }
+          } catch (e) {
+            console.error('[AUTH] Error removing cookie:', e);
+          }
         },
       },
       debug: DEBUG_AUTH
@@ -50,7 +91,7 @@ export const diagnoseAuthState = async () => {
     // Check for auth token in cookies
     const hasCookie = document.cookie
       .split('; ')
-      .some(row => row.startsWith('sb-auth-token='));
+      .some(row => row.startsWith(`${STORAGE_KEY}=`));
     console.log('[AUTH] Token exists in cookies:', hasCookie);
     
     // Try to get current session
@@ -72,7 +113,7 @@ export const diagnoseAuthState = async () => {
     document.cookie.split('; ').forEach(cookie => {
       const [name, value] = cookie.split('=');
       if (name.includes('supabase') || name.includes('sb-') || name.includes('auth')) {
-        console.log(`  ${name}: ${value?.substring(0, 20)}...`);
+        console.log(`  ${name}: ${value ? `${value.substring(0, 20)}...` : 'empty'}`);
       }
     });
     

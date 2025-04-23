@@ -2,9 +2,20 @@ import React, { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import LoadingScreen from "@/components/ui/LoadingScreen";
+import { SUPABASE_URL } from "@/config";
 
 // Enable for debugging
 const DEBUG_AUTH = true;
+
+// Helper to get the project ref for the storage key
+const getProjectRef = () => {
+  try {
+    const url = new URL(SUPABASE_URL);
+    return url.hostname.split('.')[0];
+  } catch {
+    return 'unknown';
+  }
+};
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, profile, isLoading, signOut, refreshSession, diagnoseAuth } = useAuth();
@@ -29,6 +40,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     // Clear sessionStorage
     sessionStorage.clear();
     
+    // Get the project ref for cookie clearing
+    const projectRef = getProjectRef();
+    
     // Clear cookies (with special focus on auth cookies)
     document.cookie.split(";").forEach((c) => {
       const cookieName = c.split("=")[0].trim();
@@ -37,6 +51,9 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       document.cookie = `${cookieName}=;expires=${new Date().toUTCString()};path=/;secure`;
       document.cookie = `${cookieName}=;expires=${new Date().toUTCString()};path=/;secure;SameSite=Lax`;
     });
+    
+    // Specifically clear the project-specific auth token
+    document.cookie = `sb-${projectRef}-auth-token=;expires=${new Date().toUTCString()};path=/;secure;SameSite=Lax`;
     
     // Reload the page to ensure a clean state
     window.location.href = "/";
