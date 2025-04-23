@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import LoadingScreen from "./ui/LoadingScreen";
+import LoadingScreen from "@/components/ui/LoadingScreen";
 
 // Enable for debugging
 const DEBUG_AUTH = true;
