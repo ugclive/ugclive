@@ -65,6 +65,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       logAuth(`Fetching profile for user ID: ${userId}`);
       
+      // First try to get the existing profile
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -72,14 +73,48 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .single();
       
       if (error) {
-        console.error('Error fetching profile:', error);
+        console.error('[AUTH] Error fetching profile:', error);
+        
+        // If the error is "not found", try to create a new profile
+        if (error.code === 'PGRST116' || error.message?.includes('not found')) {
+          logAuth('Profile not found, attempting to create one');
+          
+          // Get user details to use for profile creation
+          const { data: userData } = await supabase.auth.getUser();
+          const email = userData?.user?.email || '';
+          const username = userData?.user?.user_metadata?.username || email?.split('@')[0] || 'user';
+          
+          // Create a default profile
+          const { data: newProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert({
+              id: userId,
+              username: username,
+              email: email,
+              credits: 3, // Default starting credits
+              plan: 'free', // Default plan
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('[AUTH] Error creating profile:', createError);
+            return null;
+          }
+          
+          logAuth('Successfully created new profile', newProfile);
+          return newProfile as Profile;
+        }
+        
         return null;
       }
       
       logAuth('Profile fetched successfully', data);
       return data as Profile;
     } catch (error) {
-      console.error('Unexpected error fetching profile:', error);
+      console.error('[AUTH] Unexpected error fetching/creating profile:', error);
       return null;
     }
   };
@@ -110,6 +145,63 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  // Add this after refreshSession function
+  const validateAuthState = async (): Promise<boolean> => {
+    try {
+      logAuth('Validating auth state');
+      
+      // Check if we have a token in localStorage
+      const token = localStorage.getItem('sb-yoqsadxajmnqhhkajiyk-auth-token');
+      if (!token) {
+        logAuth('No auth token found in localStorage');
+        return false;
+      }
+      
+      // Try to parse the token to check it's not corrupted
+      try {
+        const parsedToken = JSON.parse(token);
+        if (!parsedToken) {
+          logAuth('Auth token is not valid JSON');
+          return false;
+        }
+      } catch (e) {
+        logAuth('Auth token is corrupted, clearing');
+        localStorage.removeItem('sb-yoqsadxajmnqhhkajiyk-auth-token');
+        return false;
+      }
+      
+      // Check if we can get a user with this token
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !userData.user) {
+        logAuth('Token validation failed - invalid user');
+        return false;
+      }
+      
+      // Check if the token is close to expiry
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session?.expires_at) {
+        const expiresAt = new Date(sessionData.session.expires_at * 1000);
+        const now = new Date();
+        const minutesUntilExpiry = Math.floor((expiresAt.getTime() - now.getTime()) / (1000 * 60));
+        
+        logAuth(`Session expires in ${minutesUntilExpiry} minutes`);
+        
+        // If token expires in less than 10 minutes, refresh it
+        if (minutesUntilExpiry < 10) {
+          logAuth('Token expiring soon, refreshing');
+          await refreshSession();
+        }
+      }
+      
+      logAuth('Auth state validation successful');
+      return true;
+    } catch (error) {
+      console.error('[AUTH] Error validating auth state:', error);
+      return false;
+    }
+  };
+  
   // Initialize auth state
   useEffect(() => {
     let mounted = true;
@@ -118,10 +210,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       try {
         logAuth('Initializing auth state');
         
-        // First check local storage for debugging
-        if (DEBUG_AUTH) {
-          const token = localStorage.getItem('sb-yoqsadxajmnqhhkajiyk-auth-token');
-          logAuth(`Auth token in localStorage: ${token ? 'Present' : 'Not found'}`);
+        // First validate the auth state
+        const isValid = await validateAuthState();
+        if (!isValid) {
+          logAuth('Auth state validation failed, clearing state');
+          if (mounted) {
+            updateState({ isLoading: false });
+          }
+          return;
         }
         
         // Get current session
@@ -180,7 +276,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
           
           // Fetch profile after auth changes with session
-          const profile = await fetchProfile(session.user.id);
+          let profile = await fetchProfile(session.user.id);
+          
+          // If profile is still null after fetch, try to create one as a fallback
+          if (!profile) {
+            logAuth('Profile still null after fetch, attempting recovery');
+            
+            // Wait a moment to ensure any database triggers have completed
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Try again with profile creation logic
+            profile = await fetchProfile(session.user.id);
+            
+            if (!profile) {
+              console.error('[AUTH] Failed to create profile after multiple attempts');
+              toast.error('Error loading your profile. Please try logging in again.');
+            }
+          }
           
           if (mounted) {
             updateState({ profile, isLoading: false });
