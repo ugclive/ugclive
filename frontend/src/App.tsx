@@ -12,7 +12,6 @@ import AdminDashboard from "./pages/AdminDashboard";
 import SelfHost from "./pages/SelfHost";
 import SelfHostBanner from "./components/SelfHostBanner";
 import { MobileWarningModal } from "./components/MobileWarningModal";
-import ResetAuth from "./pages/ResetAuth";
 import ResetAuthPage from "./pages/ResetAuthPage";
 import { useEffect } from 'react';
 import { diagnoseAuthState } from '@/integrations/supabase/client';
@@ -29,20 +28,12 @@ const queryClient = new QueryClient({
   },
 });
 
+// Improved authentication with persistent sessions - April 2023 update
+
 // Wrapper component to conditionally show the MobileWarningModal
-const MobileWarningWrapper = () => {
+const AppContent = () => {
   const location = useLocation();
   const isSelfHostPage = location.pathname === "/self-host";
-  
-  if (isSelfHostPage) {
-    return null;
-  }
-  
-  return <MobileWarningModal />;
-};
-
-const App = () => {
-  console.log("APP: Initializing app");
   
   // Add auth diagnostic on app startup
   useEffect(() => {
@@ -57,39 +48,49 @@ const App = () => {
   }, []);
   
   return (
+    <>
+      <SelfHostBanner />
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/self-host" element={<SelfHost />} />
+        <Route path="/reset-auth" element={<ResetAuthPage />} />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute requireAuth={true}>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute requireAuth={true}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      {!isSelfHostPage && <MobileWarningModal />}
+      <Toaster />
+      <Sonner />
+    </>
+  );
+};
+
+const App = () => {
+  console.log("APP: Initializing app");
+  
+  return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <TooltipProvider>
-          <SelfHostBanner />
-          <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/self-host" element={<SelfHost />} />
-              <Route path="/reset-auth" element={<ResetAuthPage />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute requireAuth={true}>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/admin"
-                element={
-                  <ProtectedRoute requireAuth={true}>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-            <MobileWarningWrapper />
-            <Toaster />
-            <Sonner />
-          </BrowserRouter>
-        </TooltipProvider>
-      </AuthProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <TooltipProvider>
+            <AppContent />
+          </TooltipProvider>
+        </AuthProvider>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 };
