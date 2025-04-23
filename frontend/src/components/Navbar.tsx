@@ -1,6 +1,6 @@
 import { Home, User, Image, Film, Calendar, BarChart2, HelpCircle, Settings, Layers, Grid, LogOut, CreditCard, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams, useNavigate } from "react-router-dom";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -55,66 +55,23 @@ const NavItem = ({
     </Link>;
 };
 
-const handleAuth = async () => {
-  try {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
-    
-    if (error) {
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error signing in:', error);
-  }
-};
-
 const Navbar = () => {
+  const [currentTab, setCurrentTab] = useState("aiugc");
   const location = useLocation();
-  const [searchParams] = useSearchParams();
-  const currentTab = searchParams.get("tab") || "aiugc";
+  const navigate = useNavigate();
+  
   const {
     user,
-    signOut
+    profile,
+    signOut,
+    signInWithOAuth
   } = useAuth();
-  const [userProfile, setUserProfile] = useState<{
-    plan: string;
-    credits?: number;
-  } | null>(null);
-  const fetchUserProfile = async () => {
-    if (user) {
-      const {
-        data,
-        error
-      } = await supabase.from('profiles').select('plan, credits').eq('id', user.id).single();
-      if (!error && data) {
-        setUserProfile(data);
-      }
-    }
-  };
-  useEffect(() => {
-    fetchUserProfile();
-  }, [user]);
 
-  const forceResetAuth = async () => {
+  const handleAuth = async () => {
     try {
-      localStorage.clear();
-      sessionStorage.clear();
-      
-      document.cookie.split(";").forEach(function(c) {
-        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-      });
-      
-      toast.success("Auth state reset. Reloading page...");
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 1000);
+      await signInWithOAuth('github');
     } catch (error) {
-      console.error("Error resetting auth:", error);
-      toast.error("Failed to reset auth state");
+      console.error("Auth error:", error);
     }
   };
 
@@ -157,12 +114,12 @@ const Navbar = () => {
                       {user.user_metadata?.full_name || user.email}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
-                      {userProfile && <span className="capitalize">{userProfile.plan} Plan</span>}
+                      {profile && <span className="capitalize">{profile.plan} Plan</span>}
                     </p>
                   </div>
                 </div>}
               
-              {userProfile && userProfile.plan !== 'free' && <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => window.location.href = '/settings'}>
+              {profile && profile.plan !== 'free' && <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => window.location.href = '/settings'}>
                   Manage Subscription
                 </Button>}
               
@@ -187,20 +144,20 @@ const Navbar = () => {
                   {user.user_metadata?.full_name || user.email}
                 </p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {userProfile && <span className="capitalize">{userProfile.plan} Plan</span>}
+                  {profile && <span className="capitalize">{profile.plan} Plan</span>}
                 </p>
               </div>
             </div>
             
-            {userProfile && userProfile.plan === 'free' && <div className="flex items-center justify-between mt-2 p-2 bg-secondary/50 rounded-lg">
+            {profile && profile.plan === 'free' && <div className="flex items-center justify-between mt-2 p-2 bg-secondary/50 rounded-lg">
                 <div className="flex items-center">
                   <CreditCard className="w-4 h-4 mr-2 text-muted-foreground" />
                   <span className="text-xs font-medium">Credits</span>
                 </div>
-                <span className="text-xs font-bold">{userProfile.credits || 0}</span>
+                <span className="text-xs font-bold">{profile.credits || 0}</span>
               </div>}
             
-            {userProfile && userProfile.plan !== 'free' && <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => window.location.href = '/settings'}>
+            {profile && profile.plan !== 'free' && <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => window.location.href = '/settings'}>
                 Manage Subscription
               </Button>}
           </div> : <div className="space-y-2">

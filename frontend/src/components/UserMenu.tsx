@@ -6,8 +6,7 @@ import {
   PopoverTrigger 
 } from "@/components/ui/popover";
 import { Settings } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast";
 
 const resetAuthState = async () => {
   try {
@@ -18,21 +17,43 @@ const resetAuthState = async () => {
       document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
     });
     
-    await supabase.auth.signOut({ scope: 'global' });
-    
-    toast.success("Authentication reset. Refreshing page...");
+    toast({
+      title: "Authentication reset",
+      description: "Refreshing page..."
+    });
     
     setTimeout(() => {
       window.location.href = "/";
     }, 1000);
   } catch (error) {
     console.error("Error resetting auth:", error);
-    toast.error("Failed to reset authentication state.");
+    toast({
+      title: "Error",
+      description: "Failed to reset authentication state.",
+      variant: "destructive"
+    });
   }
 };
 
 const UserMenu = () => {
   const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      toast({
+        title: "Success",
+        description: "Successfully signed out"
+      });
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast({
+        title: "Error",
+        description: "Failed to sign out",
+        variant: "destructive"
+      });
+    }
+  };
 
   return (
     <div className="flex items-center">
@@ -68,7 +89,7 @@ const UserMenu = () => {
               <Button 
                 variant="ghost" 
                 size="sm" 
-                onClick={signOut}
+                onClick={handleSignOut}
                 className="justify-start font-normal w-full text-destructive hover:text-destructive hover:bg-destructive/10"
               >
                 Sign Out

@@ -18,13 +18,12 @@ const getProjectRef = () => {
 };
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, profile, isLoading, signOut, refreshSession, diagnoseAuth, clearAllStorageData } = useAuth();
+  const { user, profile, isLoading, signOut, refreshSession, clearStorageData } = useAuth();
   const location = useLocation();
   
-  // Simplified state - only what's truly needed
-  const [debugInfo, setDebugInfo] = useState<any>(null);
-  const [showResetOption, setShowResetOption] = useState(false);
+  // Simplified state
   const [loadingTime, setLoadingTime] = useState(0);
+  const [showResetOption, setShowResetOption] = useState(false);
   const [recoveryAttempted, setRecoveryAttempted] = useState(false);
 
   // Clear all browser data and sign out
@@ -34,14 +33,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     // First sign out from supabase
     await signOut();
     
-    // Use the clearAllStorageData utility
-    clearAllStorageData();
+    // Use the clearStorageData utility
+    clearStorageData();
     
     // Reload the page to ensure a clean state
     window.location.href = "/";
   };
 
-  // Simpler loading timer
+  // Loading timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
     
@@ -78,22 +77,6 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     };
   }, [isLoading, loadingTime, user, recoveryAttempted, refreshSession]);
 
-  // Get debug info when debugging is enabled
-  useEffect(() => {
-    if (DEBUG_AUTH) {
-      const getDebugInfo = async () => {
-        try {
-          const info = await diagnoseAuth();
-          setDebugInfo(info);
-        } catch (e) {
-          console.error("[ProtectedRoute] Error getting debug info:", e);
-        }
-      };
-      
-      getDebugInfo();
-    }
-  }, [diagnoseAuth, isLoading, user, location.pathname]);
-
   // If we have a user but still waiting for profile, show specific loading message
   if (user && !profile) {
     return (
@@ -124,7 +107,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
               </button>
               <button
                 onClick={() => {
-                  clearAllStorageData();
+                  clearStorageData();
                   window.location.reload();
                 }}
                 className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90"
@@ -136,7 +119,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
         )}
         
         {/* Debug information section */}
-        {DEBUG_AUTH && debugInfo && (
+        {DEBUG_AUTH && (
           <div className="mt-8 p-4 border border-gray-200 rounded-md max-w-lg w-full bg-muted/50 text-xs">
             <h3 className="font-medium mb-2">Auth Debug Info:</h3>
             <pre className="overflow-auto max-h-48 p-2 bg-muted rounded">
@@ -146,11 +129,8 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
                   isLoading,
                   recoveryAttempted,
                   location: location.pathname,
-                  hasToken: debugInfo.hasToken,
-                  sessionState: debugInfo?.session,
-                  userExists: debugInfo?.user?.exists,
-                  profileExists: !!profile,
-                  contextState: debugInfo?.contextState
+                  userExists: !!user,
+                  profileExists: !!profile
                 },
                 null,
                 2
@@ -159,7 +139,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
             
             <div className="flex gap-2 mt-4 justify-end">
               <button
-                onClick={() => refreshSession().then(() => diagnoseAuth().then(setDebugInfo))}
+                onClick={() => refreshSession()}
                 className="px-2 py-1 bg-primary/10 text-primary rounded text-xs"
               >
                 Refresh Session

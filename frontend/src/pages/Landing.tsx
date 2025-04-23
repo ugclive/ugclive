@@ -77,29 +77,13 @@ const Landing = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, signInWithOAuth } = useAuth();
 
-  const handleGoogleAuth = async () => {
-    setIsLoading(true);
+  const handleGoogleLogin = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`,
-        },
-      });
-      
-      if (error) {
-        throw error;
-      }
+      await signInWithOAuth('google');
     } catch (error) {
-      toast({
-        title: "Error signing in",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+      console.error('Error signing in with Google:', error);
     }
   };
 
@@ -123,7 +107,7 @@ const Landing = () => {
                 Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
-              <Button onClick={handleGoogleAuth} disabled={isLoading}>
+              <Button onClick={handleGoogleLogin} disabled={isLoading}>
                 Start Now {isLoading && <span className="ml-2 animate-spin">⟳</span>}
               </Button>
             )}
@@ -147,7 +131,7 @@ const Landing = () => {
                 Go to Dashboard <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             ) : (
-              <Button size="lg" className="px-8 py-6 text-lg" onClick={handleGoogleAuth} disabled={isLoading}>
+              <Button size="lg" className="px-8 py-6 text-lg" onClick={handleGoogleLogin} disabled={isLoading}>
                 Start Now {isLoading && <span className="ml-2 animate-spin">⟳</span>}
               </Button>
             )}
@@ -214,7 +198,7 @@ const Landing = () => {
             </div>
             
             <div className="mt-12 text-center">
-              <Button size="lg" className="px-8" onClick={user ? goToDashboard : handleGoogleAuth} disabled={isLoading}>
+              <Button size="lg" className="px-8" onClick={user ? goToDashboard : handleGoogleLogin} disabled={isLoading}>
                 {user ? "Go to Dashboard" : "Start Now"} {!user && isLoading && <span className="ml-2 animate-spin">⟳</span>}
               </Button>
             </div>
@@ -280,7 +264,7 @@ const Landing = () => {
             </AutoCarousel>
             
             <div className="mt-12 text-center">
-              <Button size="lg" className="px-8" onClick={user ? goToDashboard : handleGoogleAuth} disabled={isLoading}>
+              <Button size="lg" className="px-8" onClick={user ? goToDashboard : handleGoogleLogin} disabled={isLoading}>
                 {user ? "Go to Dashboard" : "Start Now"} {!user && isLoading && <span className="ml-2 animate-spin">⟳</span>}
               </Button>
             </div>
@@ -314,7 +298,7 @@ const Landing = () => {
             </div>
             
             <div className="mt-12 text-center">
-              <Button variant="outline" size="lg" className="px-8" onClick={user ? goToDashboard : handleGoogleAuth} disabled={isLoading}>
+              <Button variant="outline" size="lg" className="px-8" onClick={user ? goToDashboard : handleGoogleLogin} disabled={isLoading}>
                 {user ? "Go to Dashboard" : "Start Now"} {!user && isLoading && <span className="ml-2 animate-spin">⟳</span>}
               </Button>
             </div>
@@ -403,7 +387,7 @@ const Landing = () => {
             </div>
             
             <div className="mt-16 text-center">
-              <Button size="lg" className="px-8" onClick={user ? goToDashboard : handleGoogleAuth} disabled={isLoading}>
+              <Button size="lg" className="px-8" onClick={user ? goToDashboard : handleGoogleLogin} disabled={isLoading}>
                 {user ? "Go to Dashboard" : "Start Now"} {!user && isLoading && <span className="ml-2 animate-spin">⟳</span>}
               </Button>
             </div>
@@ -451,7 +435,7 @@ const Landing = () => {
                   <Button 
                     className="w-full" 
                     size="lg" 
-                    onClick={user ? goToDashboard : handleGoogleAuth}
+                    onClick={user ? goToDashboard : handleGoogleLogin}
                     disabled={isLoading}
                   >
                     {user ? "Go to Dashboard" : "Start Now"} {!user && isLoading && <span className="ml-2 animate-spin">⟳</span>}
@@ -498,7 +482,7 @@ const Landing = () => {
                     className="w-full" 
                     size="lg" 
                     variant="default" 
-                    onClick={user ? goToDashboard : handleGoogleAuth}
+                    onClick={user ? goToDashboard : handleGoogleLogin}
                     disabled={isLoading}
                   >
                     {user ? "Go to Dashboard" : "Start Now"} {!user && isLoading && <span className="ml-2 animate-spin">⟳</span>}
@@ -562,7 +546,7 @@ const Landing = () => {
             </div>
             
             <div className="mt-12 text-center">
-              <Button size="lg" className="px-8" onClick={user ? goToDashboard : handleGoogleAuth} disabled={isLoading}>
+              <Button size="lg" className="px-8" onClick={user ? goToDashboard : handleGoogleLogin} disabled={isLoading}>
                 {user ? "Go to Dashboard" : "Start Now"} {!user && isLoading && <span className="ml-2 animate-spin">⟳</span>}
               </Button>
             </div>

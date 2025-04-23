@@ -65,24 +65,6 @@ interface Demo {
   demo_link: string;
 }
 
-const handleAuth = async () => {
-  try {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/dashboard`,
-      },
-    });
-    
-    if (error) {
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error signing in:', error);
-    toast.error(error.message || "An error occurred while signing in");
-  }
-};
-
 const ContentGenerator = () => {
   const [hook, setHook] = useState("");
   const [selectedAvatar, setSelectedAvatar] = useState<number | null>(null);
@@ -99,7 +81,7 @@ const ContentGenerator = () => {
   const [videoLayout, setVideoLayout] = useState<"serial" | "side" | "top">("serial");
   
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, signInWithOAuth } = useAuth();
   const totalSteps = 3;
 
   useEffect(() => {
@@ -205,7 +187,7 @@ const ContentGenerator = () => {
 
   const handleGenerate = () => {
     if (!user) {
-      handleAuth();
+      handleGoogleLogin();
       return;
     }
     
@@ -234,7 +216,7 @@ const ContentGenerator = () => {
 
   const handleOpenAudioSelector = () => {
     if (!user) {
-      handleAuth();
+      handleGoogleLogin();
       return;
     }
     setAudioSelectorOpen(true);
@@ -251,7 +233,7 @@ const ContentGenerator = () => {
 
   const handleAddDemo = () => {
     if (!user) {
-      handleAuth();
+      handleGoogleLogin();
       return;
     }
     setIsUploadingDemo(true);
@@ -281,6 +263,19 @@ const ContentGenerator = () => {
   const handleTwitterDM = () => {
     window.open('https://x.com/rushabtated4', '_blank');
     setUpgradeDialogOpen(false);
+  };
+
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithOAuth('google');
+    } catch (error) {
+      console.error('Error signing in with Google:', error);
+      toast({
+        title: "Error",
+        description: "Failed to sign in with Google",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
