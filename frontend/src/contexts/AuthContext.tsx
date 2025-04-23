@@ -51,6 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sessionCache = useRef<Session | null>(null);
   // Track auth state initialization
   const authStateInitialized = useRef<boolean>(false);
+  // Track if UI was hydrated from cache to prevent overriding
+  const hydratedFromCache = useRef<boolean>(false);
+  // Track last session update timestamp to debounce multiple updates
+  const lastSessionUpdateTime = useRef<number>(0);
   
   // Helper function to determine admin status
   const determineAdminStatus = (email: string | null | undefined): boolean => {
@@ -115,23 +119,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
   
   // Function to fetch user profile from Supabase with timeout
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string): Promise<Profile | null> => {
     if (!userId) {
       console.error('[AuthContext] Attempted to fetch profile without userId');
       return null;
     }
     
-    try {
-      setIsLoadingProfile(true);
-      console.log(`[AuthContext] Fetching profile for user ${userId}`);
-      
-      // Try to use cached profile first for faster loading
-      const cachedProfile = getCachedProfile(userId);
-      if (cachedProfile) {
-        console.log('[AuthContext] Using cached profile while fetching fresh data');
+    // Try to use cached profile first for faster loading
+    const cachedProfile = getCachedProfile(userId);
+    if (cachedProfile) {
+      // Set profile state if it's not already set to this profile
+      // This makes the function more idempotent and reduces rerenders
+      if (!profile || profile.id !== cachedProfile.id) {
+        console.log('[AuthContext] Using cached profile');
         setProfile(cachedProfile);
         setIsAdmin(determineAdminStatus(cachedProfile.email || user?.email));
       }
+      
+      // If we've recently fetched this profile, don't fetch again
+      // This prevents UI jank when switching tabs
+      const lastUpdateTime = cachedProfile.updated_at ? new Date(cachedProfile.updated_at).getTime() : 0;
+      const now = Date.now();
+      if (lastUpdateTime && now - lastUpdateTime < 5 * 60 * 1000) { // 5 minutes
+        console.log('[AuthContext] Skipping profile fetch - recently updated');
+        return cachedProfile;
+      }
+    }
+    
+    try {
+      setIsLoadingProfile(true);
+      console.log(`[AuthContext] Fetching profile for user ${userId}`);
       
       // Create a timeout promise
       const timeoutPromise = new Promise<null>((_, reject) => {
@@ -140,7 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }, PROFILE_FETCH_TIMEOUT);
       });
       
-      // Create the fetch profile promise
+      // Create the fetch profile promise - but don't await here yet
       const fetchProfilePromise = new Promise<Profile | null>(async (resolve) => {
         try {
           const { data, error } = await supabase
@@ -163,40 +180,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       });
       
-      // Race between timeout and fetch
-      try {
-        const profileData = await Promise.race([fetchProfilePromise, timeoutPromise]) as Profile | null;
-        
-        if (profileData) {
-          // Handle successful fetch
-          const isAdmin = determineAdminStatus(profileData.email || user?.email);
-          
-          setProfile(profileData);
-          setIsAdmin(isAdmin);
-          cacheProfile(profileData);
-          return profileData;
-        } else if (cachedProfile) {
-          // If fetch failed but we have a cached profile, keep using it
-          console.log('[AuthContext] Using cached profile due to fetch failure');
-          return cachedProfile;
-        }
-        return null;
-      } catch (error) {
-        // Timeout occurred
-        console.warn('[AuthContext] Profile fetch timed out after 3 seconds');
-        
-        if (cachedProfile) {
-          console.log('[AuthContext] Using cached profile due to timeout');
-          return cachedProfile;
-        }
-        
-        return null;
-      }
+      // Start the fetch in the background but don't block UI hydration
+      // The race is wrapped in a Promise.race with a timeout
+      Promise.race([fetchProfilePromise, timeoutPromise])
+        .then((profileData: Profile | null) => {
+          if (profileData) {
+            // Only update if this is newer than what we have
+            const currentProfileUpdateTime = profile?.updated_at ? new Date(profile.updated_at).getTime() : 0;
+            const newProfileUpdateTime = profileData.updated_at ? new Date(profileData.updated_at).getTime() : 0;
+            
+            if (!profile || !currentProfileUpdateTime || newProfileUpdateTime > currentProfileUpdateTime) {
+              console.log('[AuthContext] Updating profile with fresh data');
+              setProfile(profileData);
+              setIsAdmin(determineAdminStatus(profileData.email || user?.email));
+              cacheProfile(profileData);
+            }
+          }
+        })
+        .catch(error => {
+          console.warn('[AuthContext] Background profile fetch failed:', error);
+        })
+        .finally(() => {
+          setIsLoadingProfile(false);
+        });
+      
+      // Return the cached profile immediately while the fetch happens in background
+      return cachedProfile || null;
+      
     } catch (error) {
       console.error('[AuthContext] Error in profile fetch process:', error);
-      return null;
-    } finally {
       setIsLoadingProfile(false);
+      return cachedProfile || null;
     }
   };
   
@@ -214,10 +228,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (data.session) {
         console.log('[AuthContext] Session refreshed successfully');
-        setSession(data.session);
-        setUser(data.session.user);
-        sessionCache.current = data.session;
-        setSessionToken(data.session.access_token);
+        updateAuthState(data.session, false); // Don't override hydrated UI state
         return true;
       }
       
@@ -247,10 +258,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data } = await supabase.auth.refreshSession();
         if (data.session) {
           console.log('[AuthContext] Recovery succeeded');
-          setSession(data.session);
-          setUser(data.session.user);
-          sessionCache.current = data.session;
-          setSessionToken(data.session.access_token);
+          updateAuthState(data.session, false); // Don't override hydrated UI state
           return true;
         }
       }
@@ -280,6 +288,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Clear local state first
       setSessionToken(null);
       sessionCache.current = null;
+      hydratedFromCache.current = false;
       
       // Then sign out from Supabase
       const { error } = await supabase.auth.signOut();
@@ -340,8 +349,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
   
-  // Helper for updating auth state
-  const updateAuthState = (newSession: Session | null) => {
+  // Helper for updating auth state with debouncing and hydration protection
+  const updateAuthState = (newSession: Session | null, allowOverrideHydration: boolean = true) => {
+    // Don't override hydrated UI state unless explicitly allowed
+    if (hydratedFromCache.current && !allowOverrideHydration) {
+      console.log('[AuthContext] Skipping updateAuthState - UI already hydrated from cache');
+      
+      // Still update the session cache for future use
+      if (newSession) {
+        sessionCache.current = newSession;
+      }
+      return;
+    }
+    
+    // Debounce multiple rapid session updates (can happen during tab switches)
+    const now = Date.now();
+    if (now - lastSessionUpdateTime.current < 300) { // 300ms debounce
+      console.log('[AuthContext] Debouncing rapid session update');
+      return;
+    }
+    
+    lastSessionUpdateTime.current = now;
+    
     if (!newSession) {
       setSession(null);
       setUser(null);
@@ -350,33 +379,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     
-    setSession(newSession);
-    setUser(newSession.user);
-    sessionCache.current = newSession;
-    setSessionToken(newSession.access_token);
+    // Check if this is actually a different session to avoid unnecessary renders
+    const isNewSession = !session || 
+      session.access_token !== newSession.access_token || 
+      session.refresh_token !== newSession.refresh_token;
     
-    // Log expiry time
-    if (newSession.expires_at) {
-      const expiresAt = new Date(newSession.expires_at * 1000);
-      console.log(`[AuthContext] Session expires at ${expiresAt.toLocaleString()}`);
+    if (isNewSession) {
+      console.log('[AuthContext] Updating session state');
+      setSession(newSession);
+      setUser(newSession.user);
+      sessionCache.current = newSession;
+      setSessionToken(newSession.access_token);
+      
+      // Log expiry time
+      if (newSession.expires_at) {
+        const expiresAt = new Date(newSession.expires_at * 1000);
+        console.log(`[AuthContext] Session expires at ${expiresAt.toLocaleString()}`);
+      }
+    } else {
+      console.log('[AuthContext] Skipping session update - unchanged session');
     }
   };
   
-  // Initialize auth state and set up auth state listener
+  // Fast hydration and auth initialization
   useEffect(() => {
+    // Only run once
     if (authStateInitialized.current) return;
     authStateInitialized.current = true;
     
     console.log('[AuthContext] Starting auth initialization');
     setIsLoading(true);
     
-    // Track whether a valid session was found through any method
-    let sessionFound = false;
-    
     // Check for and clean up corrupted auth state
     cleanupAuthState();
     
-    // Fast hydration from localStorage - don't wait for Supabase
+    // PRIORITY 1: Fast hydration from localStorage - must happen before anything else
     try {
       console.log('[AuthContext] Attempting fast hydration from localStorage');
       
@@ -408,8 +445,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setProfile(cachedProfile);
             setIsAdmin(determineAdminStatus(cachedProfile.email || cachedSession.user?.email));
             
-            // Mark as initialized to prevent flashing
-            sessionFound = true;
+            // Mark as hydrated to prevent overriding
+            hydratedFromCache.current = true;
             
             // Stop loading immediately - don't wait for API responses
             setIsLoading(false);
@@ -418,59 +455,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } catch (e) {
           console.error('[AuthContext] Error parsing cached session data:', e);
-          // Continue with normal initialization
         }
       } else {
         console.log('[AuthContext] No cached session and profile found');
       }
     } catch (e) {
       console.error('[AuthContext] Error during fast hydration:', e);
-      // Continue with normal initialization
     }
     
-    // Set up auth state change listener first
+    // PRIORITY 2: Set up auth state change listener that won't block UI
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      (event, newSession) => {
         console.log(`[AuthContext] Auth state changed: ${event}`);
         
         if (newSession) {
-          updateAuthState(newSession);
-          sessionFound = true;
+          // Use the respectHydration flag to avoid overriding already hydrated UI
+          updateAuthState(newSession, false);
           
-          // Fetch profile if needed and we have a user ID
+          // Start profile fetch in the background without awaiting
           if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-            await fetchProfile(newSession.user.id);
+            if (newSession.user) {
+              // Don't await - fetch profile in background to avoid blocking UI
+              fetchProfile(newSession.user.id);
+            }
           }
         } else if (event === 'SIGNED_OUT') {
           console.log('[AuthContext] User signed out');
-          updateAuthState(null);
+          // Always apply sign out even if hydrated
+          updateAuthState(null, true);
           setProfile(null);
           cacheProfile(null);
+          hydratedFromCache.current = false;
         }
         
-        // Set loading to false after processing auth change
-        if (isLoading) {
+        // Set loading to false after processing auth change if still loading
+        if (isLoading && !hydratedFromCache.current) {
           setIsLoading(false);
         }
       }
     );
     
-    // Attempt to get the session in parallel
+    // PRIORITY 3: Background session fetch that won't override hydrated UI
     const getInitialSession = async () => {
       try {
-        // Check if we have a cached session first
-        if (sessionCache.current) {
-          console.log('[AuthContext] Using cached session');
-          updateAuthState(sessionCache.current);
-          sessionFound = true;
-          
-          if (sessionCache.current.user) {
-            await fetchProfile(sessionCache.current.user.id);
-          }
-          
-          if (isLoading) {
-            setIsLoading(false);
-          }
+        // If already hydrated from cache or we have a session, don't block UI
+        if (hydratedFromCache.current || sessionCache.current) {
+          // Still refresh the session in the background
+          refreshSession();
           return;
         }
         
@@ -486,29 +517,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         if (data.session) {
           console.log('[AuthContext] Found initial session via getSession');
-          updateAuthState(data.session);
-          sessionFound = true;
+          updateAuthState(data.session, !hydratedFromCache.current);
           
-          // Fetch profile
-          if (data.session.user) {
-            await fetchProfile(data.session.user.id);
+          // Start profile fetch but don't await it if UI is already hydrated
+          if (data.session.user && !hydratedFromCache.current) {
+            fetchProfile(data.session.user.id);
           }
         } else {
           console.log('[AuthContext] No initial session found via getSession');
         }
         
-        // Set loading to false after getSession completes if no session was found by auth state change
-        if (isLoading) {
+        // Set loading to false after getSession completes if still loading
+        if (isLoading && !hydratedFromCache.current) {
           setIsLoading(false);
         }
       } catch (error) {
         console.error('[AuthContext] Error during initialization:', error);
         setError(error as Error);
-        setIsLoading(false);
+        
+        // Ensure loading is set to false even on error
+        if (isLoading) {
+          setIsLoading(false);
+        }
       }
     };
     
-    // Start fetching session immediately
+    // Start background session fetch
     getInitialSession();
     
     // Clean up subscription on unmount
@@ -518,7 +552,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
   
-  // Refresh session periodically to prevent expiration
+  // Auto-refresh session when it's about to expire
   useEffect(() => {
     if (!session) return;
     
@@ -537,7 +571,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     
-    // Check immediately
+    // Check immediately but don't block
     checkTokenExpiration();
     
     // Set up interval to check every 5 minutes
@@ -553,9 +587,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session) refreshSession();
     };
     
-    window.addEventListener('online', handleOnline);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[AuthContext] Tab became visible, refreshing session');
+        if (session) refreshSession();
+      }
+    };
     
-    return () => window.removeEventListener('online', handleOnline);
+    window.addEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [session]);
   
   // Context value with all auth state and functions
