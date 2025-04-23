@@ -376,6 +376,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check for and clean up corrupted auth state
     cleanupAuthState();
     
+    // Fast hydration from localStorage - don't wait for Supabase
+    try {
+      console.log('[AuthContext] Attempting fast hydration from localStorage');
+      
+      // Check if we have a session in localStorage
+      const cachedSessionStr = localStorage.getItem(STORAGE_KEY);
+      const cachedProfileStr = localStorage.getItem(PROFILE_STORAGE_KEY);
+      
+      if (cachedSessionStr && cachedProfileStr) {
+        try {
+          // Parse cached data
+          const cachedSession = JSON.parse(cachedSessionStr);
+          const cachedProfile = JSON.parse(cachedProfileStr);
+          
+          // Validate cached session data structure
+          if (cachedSession && 
+              typeof cachedSession === 'object' && 
+              cachedSession.access_token && 
+              cachedSession.user?.id) {
+            
+            console.log('[AuthContext] Valid cached session and profile found, hydrating UI');
+            
+            // Set session-related state
+            setSession(cachedSession);
+            setUser(cachedSession.user);
+            sessionCache.current = cachedSession;
+            setSessionToken(cachedSession.access_token);
+            
+            // Set profile data and admin status
+            setProfile(cachedProfile);
+            setIsAdmin(determineAdminStatus(cachedProfile.email || cachedSession.user?.email));
+            
+            // Mark as initialized to prevent flashing
+            sessionFound = true;
+            
+            // Stop loading immediately - don't wait for API responses
+            setIsLoading(false);
+            
+            console.log('[AuthContext] UI hydrated from cache, continuing background refresh');
+          }
+        } catch (e) {
+          console.error('[AuthContext] Error parsing cached session data:', e);
+          // Continue with normal initialization
+        }
+      } else {
+        console.log('[AuthContext] No cached session and profile found');
+      }
+    } catch (e) {
+      console.error('[AuthContext] Error during fast hydration:', e);
+      // Continue with normal initialization
+    }
+    
     // Set up auth state change listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, newSession) => {
@@ -416,7 +468,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await fetchProfile(sessionCache.current.user.id);
           }
           
-          setIsLoading(false);
+          if (isLoading) {
+            setIsLoading(false);
+          }
           return;
         }
         
