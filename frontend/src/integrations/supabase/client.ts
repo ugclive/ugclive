@@ -9,10 +9,15 @@ const DEBUG_AUTH = true;
 // Extract project reference from the URL
 const getProjectRef = () => {
   try {
+    if (!SUPABASE_URL) return 'unknown';
     const url = new URL(SUPABASE_URL);
     return url.hostname.split('.')[0];
-  } catch {
-    return 'unknown';
+  } catch (e) {
+    // Fallback method if URL parsing fails
+    const parts = SUPABASE_URL.replace('https://', '')
+                             .replace('http://', '')
+                             .split('.');
+    return parts[0] || 'unknown';
   }
 };
 
@@ -45,7 +50,7 @@ export const supabase = createClient<Database>(
 // Diagnostic function to check auth state
 export const diagnoseAuthState = async () => {
   try {
-    console.log('[AUTH] Running auth diagnostic...');
+    console.log('[AUTH] Running diagnostic...');
     
     // Check for auth token in localStorage
     const localStorageToken = localStorage.getItem(STORAGE_KEY);
