@@ -254,11 +254,9 @@ const Landing = () => {
               {SAMPLE_VIDEOS.map((video) => (
                 <VideoCard 
                   key={video.id}
-                  title={video.title}
-                  description={video.description}
-                  thumbnail={video.thumbnail}
-                  videoUrl={video.videoUrl}
-                  gradient={video.gradient}
+                  src={video.videoUrl}
+                  poster={video.thumbnail}
+                  className={video.gradient}
                 />
               ))}
             </AutoCarousel>

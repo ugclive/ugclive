@@ -270,11 +270,7 @@ const ContentGenerator = () => {
       await signInWithOAuth('google');
     } catch (error) {
       console.error('Error signing in with Google:', error);
-      toast({
-        title: "Error",
-        description: "Failed to sign in with Google",
-        variant: "destructive"
-      });
+      toast.error("Failed to sign in with Google");
     }
   };
 
