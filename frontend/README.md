@@ -142,3 +142,31 @@ The application supports all modern browsers:
 ## License
 
 This project is proprietary software. All rights reserved.
+
+Authentication Context
+- Use localStorage for fast hydration of auth state on page load.
+- Implement session token caching to prevent loading UI flicker.
+- Add proper tab synchronization for auth state across browser tabs.
+- Use debouncing for auth state updates to prevent UI jank.
+- Track hydration state separately from loading state.
+
+File Upload Handling
+- Use XMLHttpRequest with progress event tracking for uploads.
+- Implement proper error handling for upload failures.
+- Provide meaningful progress indicators for long-running uploads.
+- Cache uploaded file information where appropriate.
+- Use Supabase Storage with signed URLs for secure uploads.
+
+Error Handling
+- Implement consistent error logging.
+- Create reusable error boundaries for component failures.
+- Use toast notifications for user-facing errors.
+- Provide graceful fallbacks for failed network requests.
+- Implement retry logic for transient failures.
+
+Testing
+- Write unit tests for critical utility functions.
+- Create integration tests for auth flows.
+- Test loading, error, and success states for components.
+- Mock Supabase responses for consistent test results.
+- Test UI components in isolation with well-defined props.

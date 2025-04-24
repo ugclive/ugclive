@@ -42,7 +42,10 @@ exports.handler = async (event) => {
   // 2. Update Supabase status to 'processing'
   await supabase
     .from('generated_videos')
-    .update({ status: 'processing' })
+    .update({
+      status: 'processing',
+      processing_start: new Date().toISOString(),
+    })
     .eq('id', id);
   
   // 3. Process video with FFmpeg
@@ -59,10 +62,10 @@ exports.handler = async (event) => {
   // 5. Update Supabase with S3 URL
   await supabase
     .from('generated_videos')
-    .update({ 
+    .update({
       status: 'completed',
-      remotion_video: s3Response.Location,
-      completed_at: new Date().toISOString()
+      s3_video_url: s3Response.Location,
+      processing_end: new Date().toISOString(),
     })
     .eq('id', id);
   

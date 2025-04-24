@@ -1,0 +1,92 @@
+You are an expert in TypeScript, React, Vite, Tailwind CSS, Supabase, and custom component systems.
+
+Code Style and Structure
+- Write concise, maintainable TypeScript code with accurate examples.
+- Use functional and declarative programming patterns; avoid classes.
+- Prefer composition and modularization over code duplication.
+- Use descriptive variable names with auxiliary verbs (e.g., isLoading, hasError).
+- Structure files: exported component, subcomponents, helpers, static content, types.
+
+Naming Conventions
+- Use PascalCase for directories (e.g., Components/AuthWizard).
+- Use PascalCase for component files.
+- Favor named exports for components.
+
+TypeScript Usage
+- Use TypeScript for all code; prefer interfaces for public APIs and types for complex types.
+- Avoid enums; use union types or const objects instead.
+- Use functional components with proper TypeScript typing.
+
+Syntax and Formatting
+- Use arrow functions for component definitions.
+- Apply consistent formatting with Prettier.
+- Prefer destructuring for props and state.
+- Use declarative JSX.
+
+UI and Styling
+- Use your custom component system consistently.
+- Apply Tailwind CSS for custom styling; use utility-first approach.
+- Implement responsive design with Tailwind breakpoints; use mobile-first approach.
+- Use consistent color schemes and spacing from Tailwind config.
+
+State Management
+- Use Supabase for data fetching and storage.
+- Create custom hooks for Supabase operations.
+- Use React Context API for global state when appropriate.
+- Apply React's useState and useReducer for local component state.
+- Implement proper loading and error states.
+
+Authentication Context
+- Use localStorage for fast hydration of auth state on page load.
+- Implement session token caching to prevent loading UI flicker.
+- Add proper tab synchronization for auth state across browser tabs.
+- Use debouncing for auth state updates to prevent UI jank.
+- Track hydration state separately from loading state.
+
+File Upload Handling
+- Use XMLHttpRequest with progress event tracking for uploads.
+- Implement proper error handling for upload failures.
+- Provide meaningful progress indicators for long-running uploads.
+- Cache uploaded file information where appropriate.
+- Use Supabase Storage with signed URLs for secure uploads.
+
+Error Handling
+- Implement consistent error logging.
+- Create reusable error boundaries for component failures.
+- Use toast notifications for user-facing errors.
+- Provide graceful fallbacks for failed network requests.
+- Implement retry logic for transient failures.
+
+Testing
+- Write unit tests for critical utility functions.
+- Create integration tests for auth flows.
+- Test loading, error, and success states for components.
+- Mock Supabase responses for consistent test results.
+- Test UI components in isolation with well-defined props.
+
+Performance Optimization
+- Use React.memo and useMemo for expensive calculations.
+- Apply code splitting with dynamic imports.
+- Optimize images: use modern formats, include size attributes, implement lazy loading.
+- Implement bundle size monitoring.
+- Use lazy loading for components not needed on initial render.
+- Optimize rerenders by avoiding unnecessary state changes.
+
+Vite Configuration
+- Organize environment variables properly.
+- Set up proper aliases for imports.
+- Configure build optimization settings.
+- Use Vite plugins effectively (e.g., vite-plugin-svgr for SVG imports).
+- Configure proper chunk splitting for optimal loading.
+- Set up development proxies if needed.
+
+Form Handling
+- Structure forms with proper validation logic.
+- Create reusable form components.
+- Implement proper error handling and user feedback.
+- Consider adding React Hook Form for complex forms.
+
+Animation and Transitions
+- Use CSS transitions for simple animations.
+- Apply consistent animation timing and easing.
+- Consider accessibility in animations (respecting reduced motion preferences).
