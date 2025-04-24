@@ -31,4 +31,5 @@ lambda-function.zip
 
 # Temporary files
 /tmp
-**/tmp 
+**/tmp # ignore node_modules to prevent token exposure
+node_modules/
