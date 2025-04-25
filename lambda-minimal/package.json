@@ -1,0 +1,19 @@
+{
+  "name": "lambda-deploy",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "package": "zip -r lambda-function.zip . -x \"*.git*\" \"*node_modules*\" \"*.zip\"",
+    "deploy": "aws lambda update-function-code --function-name ugclive-video-processor --zip-file fileb://lambda-function.zip"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "AWS Lambda function for UGC Live video processing",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "aws-sdk": "^2.1692.0",
+    "express": "^5.1.0"
+  }
+}

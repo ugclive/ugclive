@@ -71,7 +71,7 @@ export type Database = {
           error: string | null
           id: string
           remotion: Json | null
-          remotion_video: string | null
+          s3_video_url: string | null
           sound_id: number | null
           status: string
           template_id: number | null
@@ -88,7 +88,7 @@ export type Database = {
           error?: string | null
           id?: string
           remotion?: Json | null
-          remotion_video?: string | null
+          s3_video_url?: string | null
           sound_id?: number | null
           status?: string
           template_id?: number | null
@@ -107,7 +107,7 @@ export type Database = {
           error?: string | null
           id?: string
           remotion?: Json | null
-          remotion_video?: string | null
+          s3_video_url?: string | null
           sound_id?: number | null
           status?: string
           template_id?: number | null

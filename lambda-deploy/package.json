@@ -13,6 +13,7 @@
   "description": "AWS Lambda function for UGC Live video processing",
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
-    "aws-sdk": "^2.1692.0"
+    "aws-sdk": "^2.1692.0",
+    "express": "^5.1.0"
   }
 }

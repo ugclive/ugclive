@@ -1,0 +1,6 @@
+tree c1a3927e311c38b58af76756d47be45849cab35c
+parent c5c54e83ee927affd104501086c1479004de3677
+author isidoro4 <151436247+isidoro4@users.noreply.github.com> 1745422961 +0200
+committer isidoro4 <151436247+isidoro4@users.noreply.github.com> 1745422961 +0200
+
+Add hasHydrated flag to AuthContext to prevent UI flickers

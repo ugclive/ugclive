@@ -175,6 +175,18 @@ app.post("/trigger-video-generation", async (req, res) => {
       // Upload the final processed video to S3
       const s3Url = await uploadToS3(processedVideo, id);
       
+      // Update Supabase with video URL
+      log('Updating Supabase with video URL');
+      const { error: updateError } = await supabase
+        .from('generated_videos')
+        .update({
+          status: 'completed',
+          s3_video_url: s3Url,
+          completed_at: new Date().toISOString(),
+          error: null
+        })
+        .eq('id', id);
+      
       res.json({
         success: true,
         message: "Video generation process triggered",
