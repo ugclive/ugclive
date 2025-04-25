@@ -18,6 +18,8 @@ if (!fs.existsSync(outputDir)) {
 const LAMBDA_API_URL = process.env.LAMBDA_API_URL || "https://f3959lb343.execute-api.us-east-1.amazonaws.com/prod/generate-video";
 const MAX_RETRIES = 3;
 const TIMEOUT_MS = 15000; // 15 seconds timeout for API calls
+const FFMPEG_PATH = process.env.FFMPEG_PATH || '/opt/bin/ffmpeg';
+const FFPROBE_PATH = process.env.FFPROBE_PATH || '/opt/bin/ffprobe';
 
 // Create Express app
 const app = express();
@@ -138,11 +140,47 @@ app.post("/trigger-video-generation", async (req, res) => {
       const processingTime = Date.now() - startTime;
       console.log(`Successfully triggered video generation for ID: ${id} (${processingTime}ms)`);
       
+      // Download audio if it exists
+      let audioPath = null;
+      if (data.sound) {
+        const audioFileName = `${id}_audio.mp3`;
+        audioPath = path.join(outputDir, audioFileName);
+        console.log(`Downloading audio: ${data.sound}`);
+        await downloadFile(data.sound, audioPath);
+      }
+      
+      // Prepare for text overlay
+      const caption = data.caption || data.caption;
+      const textPosition = data.text_alignment || 'bottom';
+      
+      // First transcode the video to ensure compatible format
+      let processedVideo = await transcodeVideo(data.template, data.output);
+      
+      // If we have audio, add it to the video
+      if (audioPath) {
+        const withAudioPath = path.join(outputDir, `${id}_with_audio.mp4`);
+        console.log('Adding audio to video');
+        await addAudioToVideo(processedVideo, audioPath, withAudioPath);
+        processedVideo = withAudioPath;
+      }
+      
+      // If we have caption text, add it
+      if (caption) {
+        const withTextPath = path.join(outputDir, `${id}_with_text.mp4`);
+        console.log(`Adding caption to video: "${caption}"`);
+        await addTextOverlay(processedVideo, caption, textPosition, withTextPath);
+        processedVideo = withTextPath;
+      }
+      
+      // Upload the final processed video to S3
+      const s3Url = await uploadToS3(processedVideo, id);
+      
       res.json({
         success: true,
         message: "Video generation process triggered",
         id,
-        processingTime
+        processingTime,
+        s3Url
       });
     } else {
       console.error(`Lambda API returned error for ID ${id}:`, response.data);
@@ -232,3 +270,138 @@ const server = app.listen(port, async () => {
     console.log("Server is running but some initializations failed.");
   }
 });
+
+// Function to combine videos (template + demo)
+async function combineVideos(template, demo, output, layout = 'side') {
+  let ffmpegCmd = '';
+  
+  if (layout === 'side') {
+    // Side-by-side layout
+    ffmpegCmd = `${FFMPEG_PATH} -i "${template}" -i "${demo}" -filter_complex "[0:v]scale=640:360[left];[1:v]scale=640:360[right];[left][right]hstack=inputs=2[v]" -map "[v]" -c:v libx264 -crf 23 "${output}"`;
+  } else if (layout === 'sequential') {
+    // Sequential layout
+    ffmpegCmd = `${FFMPEG_PATH} -i "${template}" -i "${demo}" -filter_complex concat=n=2:v=1:a=1 -c:v libx264 -crf 23 "${output}"`;
+  }
+  
+  log(`Running combine command: ${ffmpegCmd}`);
+  await execPromise(ffmpegCmd);
+  return output;
+}
+
+// Function to add text overlay
+async function addTextOverlay(video, text, position, output) {
+  let y = '10'; // Default top
+  
+  if (position === 'center') {
+    y = '(h-text_h)/2';
+  } else if (position === 'bottom') {
+    y = 'h-text_h-10';
+  }
+  
+  const ffmpegCmd = `${FFMPEG_PATH} -i "${video}" -vf "drawtext=text='${text}':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=${y}" -c:a copy "${output}"`;
+  
+  log(`Running text overlay command: ${ffmpegCmd}`);
+  await execPromise(ffmpegCmd);
+  return output;
+}
+
+// Add retry logic for network operations
+async function withRetry(operation, maxRetries = 3, delay = 1000) {
+  let lastError;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      log(`Operation failed (attempt ${attempt}/${maxRetries}): ${error.message}`);
+      
+      if (attempt < maxRetries) {
+        log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        // Exponential backoff
+        delay *= 2;
+      }
+    }
+  }
+  
+  throw lastError;
+}
+
+// Add more detailed logging
+log(`Memory usage: ${Math.round(process.memoryUsage().rss / 1024 / 1024)} MB`);
+
+// Track processing time
+const startTime = Date.now();
+// ... do processing
+const processingTime = Date.now() - startTime;
+log(`Video processing completed in ${processingTime / 1000} seconds`);
+
+// Add audio to video
+async function addAudioToVideo(videoPath, audioPath, outputPath) {
+  try {
+    // Command to add audio to video
+    const ffmpegCmd = `${FFMPEG_PATH} -i "${videoPath}" -i "${audioPath}" -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 -shortest "${outputPath}" -y`;
+    log(`Running command: ${ffmpegCmd}`);
+    
+    const { stdout, stderr } = await execPromise(ffmpegCmd);
+    
+    // Check if output file exists and has content
+    if (fs.existsSync(outputPath)) {
+      const outputStats = fs.statSync(outputPath);
+      log(`Audio addition complete. Output file size: ${outputStats.size} bytes`);
+      
+      if (outputStats.size === 0) {
+        throw new Error('Output file is empty');
+      }
+      
+      return outputPath;
+    } else {
+      log(`FFmpeg stderr: ${stderr}`);
+      throw new Error('Output file does not exist');
+    }
+  } catch (error) {
+    log(`Error adding audio: ${error.message}`);
+    throw error;
+  }
+}
+
+// Add text overlay
+async function addTextOverlay(videoPath, text, position, outputPath) {
+  try {
+    // Determine text position
+    let y = '10'; // Default top
+    if (position === 'center') {
+      y = '(h-text_h)/2';
+    } else if (position === 'bottom') {
+      y = 'h-text_h-10';
+    }
+    
+    // Escape special characters in text
+    const escapedText = text.replace(/'/g, "'\\''");
+    
+    // Command to add text overlay
+    const ffmpegCmd = `${FFMPEG_PATH} -i "${videoPath}" -vf "drawtext=text='${escapedText}':fontcolor=white:fontsize=24:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-text_w)/2:y=${y}" -c:a copy "${outputPath}" -y`;
+    log(`Running command: ${ffmpegCmd}`);
+    
+    const { stdout, stderr } = await execPromise(ffmpegCmd);
+    
+    // Check if output file exists and has content
+    if (fs.existsSync(outputPath)) {
+      const outputStats = fs.statSync(outputPath);
+      log(`Text overlay addition complete. Output file size: ${outputStats.size} bytes`);
+      
+      if (outputStats.size === 0) {
+        throw new Error('Output file is empty');
+      }
+      
+      return outputPath;
+    } else {
+      log(`FFmpeg stderr: ${stderr}`);
+      throw new Error('Output file does not exist');
+    }
+  } catch (error) {
+    log(`Error adding text overlay: ${error.message}`);
+    throw error;
+  }
+}
